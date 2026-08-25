@@ -1,0 +1,31 @@
+root = true
+
+[*]
+indent_style = space
+indent_size = 2
+end_of_line = lf
+charset = utf-8
+trim_trailing_whitespace = true
+insert_final_newline = true
+max_line_length = 100
+
+[*.{java,scala,kotlin}]
+indent_size = 4
+max_line_length = 120
+
+[*.{md,markdown}]
+trim_trailing_whitespace = false
+
+[*.{yml,yaml}]
+indent_size = 2
+max_line_length = 120
+
+[*.{xml,pom}]
+indent_size = 2
+max_line_length = 120
+
+[*.{sh,ps1,bat,cmd}]
+end_of_line = crlf
+
+[Makefile]
+indent_style = tab

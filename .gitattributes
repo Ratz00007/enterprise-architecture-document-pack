@@ -1,0 +1,39 @@
+* text=auto eol=lf
+
+# Shell scripts: enforce LF
+*.sh           text eol=lf
+*.bash         text eol=lf
+
+# PowerShell / Windows scripts: enforce CRLF on Windows runners, LF on Linux
+*.ps1          text eol=crlf
+*.psm1         text eol=crlf
+*.bat          text eol=crlf
+*.cmd          text eol=crlf
+
+# Binary-ish or vendor-controlled
+*.jar          binary
+*.war          binary
+*.ear          binary
+*.png          binary
+*.jpg          binary
+*.jpeg         binary
+*.gif          binary
+*.webp         binary
+*.ico          binary
+*.pdf          binary
+*.docx         binary
+*.xlsx         binary
+*.pptx         binary
+*.zip          binary
+*.7z           binary
+*.gz           binary
+*.tgz          binary
+*.tar          binary
+
+# Linguist overrides — make sure the pack is recognized
+*.docx         linguist-documentation
+*.md           linguist-documentation
+ADR-*.md      linguist-documentation
+
+# Diff drivers (placeholder; wire up later if needed)
+# *.java        diff=java
