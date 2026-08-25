@@ -33,6 +33,13 @@
 | [ADR-011](./ADR-011-genai-data-boundary-and-gateway.md) | GenAI gateway via LiteLLM; production data is allow-listed, never default | **Accepted** | This project | GenAI integration, data architecture |
 | [ADR-012](./ADR-012-insurance-claims-domain-scope.md) | Application domain: insurance claims processing (FNOL → adjudication → payout) | **Accepted** | This project (locked in by stakeholder) | Product scope |
 | [ADR-013](./ADR-013-test-pyramid-and-quality-gates.md) | Test pyramid, coverage gates, and required promotion checks | **Accepted** | This project | Test strategy, CI/CD |
+| [ADR-014](./ADR-014-physical-server-specifications.md) | Physical server specifications, capacity, and NIC configurations | **Accepted** | This project | Infrastructure, procurement |
+| [ADR-015](./ADR-015-backup-dr-bcp.md) | Backup, disaster recovery, and business continuity baseline | **Accepted** | This project | Operations, compliance |
+| [ADR-016](./ADR-016-identity-authn-authz.md) | Identity, authentication, and authorization beyond OIDC+RBAC | **Accepted** | This project | Security, Keycloak |
+| [ADR-017](./ADR-017-data-masking-sanitization.md) | Production data masking and sanitization for two-database sync | **Accepted** | This project | Data architecture, security |
+| [ADR-018](./ADR-018-manual-testing-subtypes.md) | Manual testing sub-types: UAT and Operational Readiness Testing | **Accepted** | This project | Test strategy, quality |
+| [ADR-019](./ADR-019-observability-tooling.md) | Observability tooling: Prometheus + Grafana + Loki + Tempo | **Accepted** | This project | Observability, operations |
+| [ADR-020](./ADR-020-ha-dr-targets.md) | High availability and disaster recovery targets (baseline, RPO/RTO TBD) | **Accepted** (Baseline - Targets TBD) | This project | Architecture, operations |
 
 ## Proposed (open for review)
 
