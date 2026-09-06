@@ -5,7 +5,7 @@ server:
 
 spring:
   application:
-    name: acme-claims-backend
+    name: claims-api
   profiles:
     active: dev
   datasource:
@@ -39,7 +39,7 @@ keycloak:
   enabled: true
   auth-server-url: ${KEYCLOAK_URL:http://localhost:8180}
   realm: ${KEYCLOAK_REALM:acme-claims}
-  resource: ${KEYCLOAK_CLIENT_ID:acme-claims-backend}
+  resource: ${KEYCLOAK_CLIENT_ID:claims-api}
   credentials:
     secret: ${KEYCLOAK_CLIENT_SECRET:backend-secret}
   principal-attribute: preferred_username
@@ -58,7 +58,7 @@ genai:
 # OpenTelemetry Configuration
 otel:
   service:
-    name: acme-claims-backend
+    name: claims-api
   exporter:
     otlp:
       endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4317}

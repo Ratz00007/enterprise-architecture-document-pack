@@ -1,5 +1,5 @@
 {
-  "name": "acme-claims-frontend",
+  "name": "claims-web",
   "version": "1.0.0",
   "private": true,
   "description": "Fortune 500-grade insurance claims processing platform frontend",

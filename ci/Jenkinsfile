@@ -56,21 +56,21 @@ pipeline {
                 stage('Build Backend') {
                     agent { label 'jenkins-agent' }
                     steps {
-                        dir('apps/backend') {
+                        dir('apps/claims-api') {
                             sh 'mvn clean package -DskipTests'
                         }
-                        archiveArtifacts artifacts: 'apps/backend/target/*.jar', allowEmptyArchive: true
+                        archiveArtifacts artifacts: 'apps/claims-api/target/*.jar', allowEmptyArchive: true
                     }
                 }
                 
                 stage('Build Frontend') {
                     agent { label 'jenkins-agent-node' }
                     steps {
-                        dir('apps/frontend') {
+                        dir('apps/claims-web') {
                             sh 'npm ci'
                             sh 'npm run build'
                         }
-                        archiveArtifacts artifacts: 'apps/frontend/dist/**', allowEmptyArchive: true
+                        archiveArtifacts artifacts: 'apps/claims-web/dist/**', allowEmptyArchive: true
                     }
                 }
             }
@@ -82,10 +82,10 @@ pipeline {
                 stage('Unit Tests') {
                     agent { label 'jenkins-agent' }
                     steps {
-                        dir('apps/backend') {
+                        dir('apps/claims-api') {
                             sh 'mvn test'
                         }
-                        junit 'apps/backend/target/surefire-reports/*.xml'
+                        junit 'apps/claims-api/target/surefire-reports/*.xml'
                     }
                 }
                 
@@ -125,7 +125,7 @@ pipeline {
                 stage('Dependency Check') {
                     agent { label 'jenkins-agent' }
                     steps {
-                        dir('apps/backend') {
+                        dir('apps/claims-api') {
                             sh 'mvn org.owasp:dependency-check-maven:check'
                         }
                         dependencyCheckAdditionalArguments '--format HTML --format JUNIT'
@@ -219,13 +219,13 @@ def deployToEnvironment(String env) {
     
     // Deploy backend
     sh """
-        scp apps/backend/target/*.jar ${config.backendServer}:/opt/acme-claims/
-        ssh ${config.backendServer} 'systemctl restart acme-claims-backend'
+        scp apps/claims-api/target/*.jar ${config.backendServer}:/opt/acme-claims/
+        ssh ${config.backendServer} 'systemctl restart claims-api'
     """
     
     // Deploy frontend
     sh """
-        scp -r apps/frontend/dist/* ${config.frontendServer}:/var/www/acme-claims/
+        scp -r apps/claims-web/dist/* ${config.frontendServer}:/var/www/acme-claims/
     """
     
     // Health check

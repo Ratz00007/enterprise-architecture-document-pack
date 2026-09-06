@@ -93,9 +93,9 @@ pnpm dev
 
 | Workstream | Status | Owner |
 |------------|--------|-------|
-| Architecture & ADRs | ✅ Foundation complete | Architect lead |
-| App API skeleton (Spring Boot) | ✅ Build green, endpoints TBD | Backend lead |
-| Web skeleton (React + TS) | ✅ Build green, UI TBD | Frontend lead |
+| Architecture & ADRs | ✅ Foundation complete (ADR numbering gap 006–013 to reconcile) | Architect lead |
+| App API skeleton (Spring Boot) | 🟡 Baseline merged (PR #1) — rework + core endpoints in progress | Backend lead |
+| Web skeleton (React + TS) | 🟡 `package.json` only, no UI yet | Frontend lead |
 | GenAI gateway | 🟡 Scaffolded, config TBD | Platform lead |
 | DB sync pipeline | 🟡 Scaffolded, mechanism TBD | Data lead |
 | Observability | 🟡 Prometheus + Loki config drafted | SRE lead |

@@ -13,9 +13,9 @@
     </parent>
     
     <groupId>com.acme.claims</groupId>
-    <artifactId>acme-claims-backend</artifactId>
+    <artifactId>claims-api</artifactId>
     <version>1.0.0-SNAPSHOT</version>
-    <name>Acme Claims Processing Platform</name>
+    <name>Acme Claims API</name>
     <description>Fortune 500-grade insurance claims processing platform</description>
     
     <properties>
