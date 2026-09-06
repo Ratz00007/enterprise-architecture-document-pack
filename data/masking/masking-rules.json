@@ -1,0 +1,326 @@
+{
+  "version": "1.0.0",
+  "description": "PII/PHI Masking Rules for Acme Claims Database",
+  "lastUpdated": "2024-08-25T00:00:00Z",
+  "complianceFrameworks": ["HIPAA", "GDPR", "State Insurance Regulations"],
+  
+  "entities": {
+    "customers": {
+      "fields": {
+        "first_name": {
+          "classification": "PII",
+          "technique": "synthetic_replacement",
+          "pattern": "[CLAIM_{id}_FIRST]",
+          "reversible": false
+        },
+        "last_name": {
+          "classification": "PII",
+          "technique": "synthetic_replacement",
+          "pattern": "[CLAIM_{id}_LAST]",
+          "reversible": false
+        },
+        "ssn": {
+          "classification": "PII",
+          "technique": "format_preserving_encryption",
+          "algorithm": "FF3-1",
+          "keyReference": "hsm://acme-claims/pii-masking-key-001",
+          "reversible": true,
+          "reverseEnvironment": "production-only"
+        },
+        "date_of_birth": {
+          "classification": "PII",
+          "technique": "date_offset",
+          "preserveYear": true,
+          "offsetDays": {"min": -120, "max": 120},
+          "reversible": false
+        },
+        "email": {
+          "classification": "PII",
+          "technique": "hash_with_domain_preservation",
+          "pattern": "claim_{id}_hash{8char_hash}@{domain}",
+          "reversible": false
+        },
+        "phone": {
+          "classification": "PII",
+          "technique": "format_preserving_random",
+          "pattern": "(555) ###-####",
+          "preserveFormat": true,
+          "reversible": false
+        },
+        "address_line1": {
+          "classification": "PII",
+          "technique": "generalization",
+          "strategy": "remove_street_number_and_name",
+          "example": "Springfield, IL 627XX",
+          "reversible": false
+        },
+        "city": {
+          "classification": "Internal",
+          "technique": "unchanged",
+          "reason": "City-level geography acceptable for testing"
+        },
+        "state": {
+          "classification": "Internal",
+          "technique": "unchanged",
+          "reason": "State-level geography acceptable for testing"
+        },
+        "zip_code": {
+          "classification": "PII",
+          "technique": "truncation",
+          "preserveDigits": 3,
+          "example": "627XX",
+          "reversible": false
+        },
+        "drivers_license": {
+          "classification": "PII",
+          "technique": "format_preserving_random",
+          "preserveStateFormat": true,
+          "pattern": "{STATE_LETTER}9##-####-####",
+          "reversible": false
+        }
+      }
+    },
+    
+    "claims": {
+      "fields": {
+        "claim_id": {
+          "classification": "Internal",
+          "technique": "unchanged",
+          "reason": "Primary key - must be preserved for referential integrity"
+        },
+        "policy_number": {
+          "classification": "Internal",
+          "technique": "prefix_suffix_mask",
+          "preservePrefix": 3,
+          "preserveSuffix": 2,
+          "maskCharacter": "*",
+          "example": "POL***456***78",
+          "reversible": false
+        },
+        "claimant_customer_id": {
+          "classification": "Internal",
+          "technique": "unchanged",
+          "reason": "Foreign key - must be preserved for referential integrity"
+        },
+        "incident_date": {
+          "classification": "Internal",
+          "technique": "unchanged",
+          "reason": "Temporal data needed for testing date-based logic"
+        },
+        "description": {
+          "classification": "Internal",
+          "technique": "named_entity_redaction",
+          "redactEntities": ["PERSON", "LOCATION", "ORGANIZATION"],
+          "preservedEntities": ["DATE", "MONEY", "EVENT"],
+          "reversible": false
+        },
+        "status": {
+          "classification": "Internal",
+          "technique": "unchanged",
+          "reason": "Business state - needed for workflow testing"
+        },
+        "triage_priority": {
+          "classification": "Internal",
+          "technique": "unchanged",
+          "reason": "Business state - needed for priority testing"
+        },
+        "adjudication_decision": {
+          "classification": "Internal",
+          "technique": "unchanged",
+          "reason": "Business state - needed for decision logic testing"
+        },
+        "payout_amount": {
+          "classification": "Confidential",
+          "technique": "unchanged",
+          "reason": "Financial amount needed for calculation testing; no PII"
+        }
+      }
+    },
+    
+    "medical_records": {
+      "fields": {
+        "medical_record_id": {
+          "classification": "PHI",
+          "technique": "format_preserving_encryption",
+          "algorithm": "FF3-1",
+          "keyReference": "hsm://acme-claims/phi-masking-key-002",
+          "preservePrefix": "MRN-",
+          "reversible": true,
+          "reverseEnvironment": "production-only"
+        },
+        "claim_id": {
+          "classification": "Internal",
+          "technique": "unchanged",
+          "reason": "Foreign key - must be preserved for referential integrity"
+        },
+        "patient_customer_id": {
+          "classification": "PHI",
+          "technique": "unchanged",
+          "reason": "Foreign key - must be preserved for referential integrity"
+        },
+        "diagnosis_code": {
+          "classification": "PHI",
+          "technique": "category_generalization",
+          "strategy": "preserve_category_generalize_specific",
+          "example": "E11.9 → E11.X",
+          "reversible": false
+        },
+        "treatment_description": {
+          "classification": "PHI",
+          "technique": "specific_detail_redaction",
+          "redactPatterns": [
+            "specific_medication_names",
+            "specific_dosages",
+            "specific_procedure_details",
+            "provider_names"
+          ],
+          "preserveGeneral": [
+            "treatment_type",
+            "body_system",
+            "general_approach"
+          ],
+          "example": "Chemotherapy with cisplatin → Cancer treatment with medication",
+          "reversible": false
+        },
+        "provider_name": {
+          "classification": "PHI",
+          "technique": "type_generalization",
+          "example": "Dr. John Smith at Mayo Clinic → [SPECIALIST] at [TERTIARY_CARE_FACILITY]",
+          "reversible": false
+        },
+        "service_date": {
+          "classification": "PHI",
+          "technique": "unchanged",
+          "reason": "Temporal data needed for service timeline testing"
+        },
+        "cost_amount": {
+          "classification": "Confidential",
+          "technique": "unchanged",
+          "reason": "Financial amount needed for billing logic testing; no direct PHI"
+        }
+      }
+    },
+    
+    "financial_accounts": {
+      "fields": {
+        "account_id": {
+          "classification": "Internal",
+          "technique": "unchanged",
+          "reason": "Primary key - must be preserved for referential integrity"
+        },
+        "customer_id": {
+          "classification": "PII",
+          "technique": "unchanged",
+          "reason": "Foreign key - must be preserved for referential integrity"
+        },
+        "account_number": {
+          "classification": "PII",
+          "technique": "format_preserving_encryption",
+          "algorithm": "FF3-1",
+          "keyReference": "hsm://acme-claims/financial-masking-key-003",
+          "reversible": true,
+          "reverseEnvironment": "production-only"
+        },
+        "routing_number": {
+          "classification": "Confidential",
+          "technique": "unchanged",
+          "reason": "Bank routing numbers are public information"
+        },
+        "account_type": {
+          "classification": "Internal",
+          "technique": "unchanged",
+          "reason": "Account type needed for payout logic testing"
+        },
+        "balance": {
+          "classification": "Confidential",
+          "technique": "unchanged",
+          "reason": "Financial amount needed for validation testing"
+        }
+      }
+    }
+  },
+  
+  "validationRules": {
+    "preExport": [
+      {
+        "name": "row_count_documentation",
+        "description": "Document row counts for all tables before export",
+        "query": "SELECT schemaname, tablename, n_live_tup FROM pg_stat_user_tables ORDER BY n_live_tup DESC;"
+      },
+      {
+        "name": "checksum_calculation",
+        "description": "Calculate checksums for audit trail",
+        "algorithm": "SHA-256"
+      },
+      {
+        "name": "data_classification_scan",
+        "description": "Verify all PII/PHI fields are identified",
+        "required": true
+      }
+    ],
+    
+    "postMasking": [
+      {
+        "name": "ssn_pattern_check",
+        "description": "Ensure no raw SSN patterns exist",
+        "query": "SELECT COUNT(*) FROM customers WHERE ssn ~ '^[0-9]{3}-[0-9]{2}-[0-9]{4}$';",
+        "threshold": 0,
+        "severity": "CRITICAL"
+      },
+      {
+        "name": "email_format_check",
+        "description": "Ensure all emails follow masked format",
+        "query": "SELECT COUNT(*) FROM customers WHERE email !~ '^claim_[0-9]+_hash[a-f0-9]+@';",
+        "threshold": 0,
+        "severity": "CRITICAL"
+      },
+      {
+        "name": "foreign_key_integrity",
+        "description": "Verify all foreign key relationships are preserved",
+        "required": true,
+        "severity": "CRITICAL"
+      },
+      {
+        "name": "referential_integrity",
+        "description": "Ensure no orphaned records exist",
+        "required": true,
+        "severity": "CRITICAL"
+      },
+      {
+        "name": "statistical_distribution",
+        "description": "Verify masked data maintains similar distributions",
+        "tolerance": "±10%",
+        "severity": "WARNING"
+      }
+    ]
+  },
+  
+  "auditLogging": {
+    "enabled": true,
+    "logFields": [
+      "timestamp",
+      "userId",
+      "sourceDatabase",
+      "destinationDatabase",
+      "tablesProcessed",
+      "rowCountBefore",
+      "rowCountAfter",
+      "rulesVersion",
+      "validationResults",
+      "approvalTicketId"
+    ],
+    "retentionYears": 7,
+    "storageLocation": "/var/log/acme/masking-audit.log"
+  },
+  
+  "accessControl": {
+    "roles": {
+      "canInitiateMasking": ["dba", "data-steward"],
+      "canApproveMasking": ["data-steward"],
+      "canViewProductionPII": ["dba", "data-steward", "auditor"],
+      "canViewMaskedData": ["developer", "qa-engineer", "dba", "data-steward", "auditor"]
+    },
+    "approvalRequired": true,
+    "approvalWorkflow": "servicenow:data-replication-request"
+  }
+}

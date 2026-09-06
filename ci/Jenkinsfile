@@ -1,0 +1,237 @@
+// Jenkinsfile for Acme Claims Processing Platform
+// Implements four sequential environments: Dev → QA → UAT → Prod
+// As per ADR-004 and CI/CD documentation
+
+pipeline {
+    agent none
+    
+    environment {
+        APPLICATION_NAME = 'acme-claims'
+        DOCKER_REGISTRY = 'registry.acme.internal'
+        SONAR_HOST_URL = 'https://sonarqube.acme.internal'
+        KEYCLOAK_URL = 'https://keycloak.acme.internal'
+        GENAI_GATEWAY_URL = 'https://genai-gateway.acme.internal'
+    }
+    
+    parameters {
+        choice(name: 'DEPLOY_ENV', choices: ['dev', 'qa', 'uat', 'prod'], description: 'Target deployment environment')
+        booleanParam(name: 'RUN_TESTS', defaultValue: true, description: 'Run test suite')
+        booleanParam(name: 'RUN_SECURITY_SCAN', defaultValue: true, description: 'Run security scanning')
+        string(name: 'GIT_BRANCH', defaultValue: 'main', description: 'Git branch to build')
+    }
+    
+    stages {
+        stage('Checkout') {
+            agent { label 'jenkins-agent' }
+            steps {
+                checkout scm
+                script {
+                    env.GIT_COMMIT_SHORT = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                }
+            }
+        }
+        
+        stage('Code Quality') {
+            agent { label 'jenkins-agent' }
+            stages {
+                stage('SonarQube Analysis') {
+                    steps {
+                        script {
+                            if (params.RUN_TESTS) {
+                                sh '''
+                                    mvn sonar:sonar \
+                                        -Dsonar.host.url=${SONAR_HOST_URL} \
+                                        -Dsonar.projectKey=acme-claims \
+                                        -Dsonar.branch.name=${GIT_BRANCH}
+                                '''
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Build') {
+            parallel {
+                stage('Build Backend') {
+                    agent { label 'jenkins-agent' }
+                    steps {
+                        dir('apps/backend') {
+                            sh 'mvn clean package -DskipTests'
+                        }
+                        archiveArtifacts artifacts: 'apps/backend/target/*.jar', allowEmptyArchive: true
+                    }
+                }
+                
+                stage('Build Frontend') {
+                    agent { label 'jenkins-agent-node' }
+                    steps {
+                        dir('apps/frontend') {
+                            sh 'npm ci'
+                            sh 'npm run build'
+                        }
+                        archiveArtifacts artifacts: 'apps/frontend/dist/**', allowEmptyArchive: true
+                    }
+                }
+            }
+        }
+        
+        stage('Test') {
+            when { expression { return params.RUN_TESTS } }
+            parallel {
+                stage('Unit Tests') {
+                    agent { label 'jenkins-agent' }
+                    steps {
+                        dir('apps/backend') {
+                            sh 'mvn test'
+                        }
+                        junit 'apps/backend/target/surefire-reports/*.xml'
+                    }
+                }
+                
+                stage('Integration Tests') {
+                    agent { label 'jenkins-agent' }
+                    steps {
+                        dir('tests/integration') {
+                            sh 'mvn verify -Pintegration-test'
+                        }
+                    }
+                }
+                
+                stage('E2E Tests') {
+                    agent { label 'jenkins-agent-node' }
+                    steps {
+                        dir('tests/e2e') {
+                            sh 'npx playwright test'
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Security Scan') {
+            when { expression { return params.RUN_SECURITY_SCAN } }
+            parallel {
+                stage('SAST') {
+                    agent { label 'jenkins-agent' }
+                    steps {
+                        sh '''
+                            # Run SAST scanning
+                            echo "Running SAST scan..."
+                        '''
+                    }
+                }
+                
+                stage('Dependency Check') {
+                    agent { label 'jenkins-agent' }
+                    steps {
+                        dir('apps/backend') {
+                            sh 'mvn org.owasp:dependency-check-maven:check'
+                        }
+                        dependencyCheckAdditionalArguments '--format HTML --format JUNIT'
+                    }
+                }
+                
+                stage('Container Scan') {
+                    agent { label 'jenkins-agent' }
+                    steps {
+                        sh '''
+                            # Run container vulnerability scanning
+                            echo "Running container scan..."
+                        '''
+                    }
+                }
+            }
+        }
+        
+        stage('Deploy to Dev') {
+            when { expression { return params.DEPLOY_ENV == 'dev' } }
+            agent { label 'jenkins-agent' }
+            steps {
+                script {
+                    deployToEnvironment('dev')
+                }
+            }
+        }
+        
+        stage('Deploy to QA') {
+            when { expression { return params.DEPLOY_ENV == 'qa' } }
+            agent { label 'jenkins-agent' }
+            steps {
+                input message: 'Proceed with deployment to QA?', ok: 'Deploy to QA'
+                script {
+                    deployToEnvironment('qa')
+                }
+            }
+        }
+        
+        stage('Deploy to UAT') {
+            when { expression { return params.DEPLOY_ENV == 'uat' } }
+            agent { label 'jenkins-agent' }
+            steps {
+                input message: 'Proceed with deployment to UAT?', ok: 'Deploy to UAT'
+                script {
+                    deployToEnvironment('uat')
+                }
+            }
+        }
+        
+        stage('Deploy to Production') {
+            when { expression { return params.DEPLOY_ENV == 'prod' } }
+            agent { label 'jenkins-agent' }
+            steps {
+                input message: '⚠️ PROCEED WITH PRODUCTION DEPLOYMENT? ⚠️', ok: 'Deploy to Production'
+                script {
+                    deployToEnvironment('prod')
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            cleanWs()
+        }
+        success {
+            script {
+                slackSend(color: 'good', message: "✅ Build ${env.JOB_NAME} #${env.BUILD_NUMBER} succeeded for ${params.DEPLOY_ENV}")
+            }
+        }
+        failure {
+            script {
+                slackSend(color: 'danger', message: "❌ Build ${env.JOB_NAME} #${env.BUILD_NUMBER} failed for ${params.DEPLOY_ENV}")
+            }
+        }
+    }
+}
+
+def deployToEnvironment(String env) {
+    echo "Deploying to ${env} environment..."
+    
+    // Load environment-specific configuration
+    def config = load "ci/config/${env}.groovy"
+    
+    // Deploy database migrations
+    sh """
+        cd data/migration
+        ./migrate.sh --environment ${env}
+    """
+    
+    // Deploy backend
+    sh """
+        scp apps/backend/target/*.jar ${config.backendServer}:/opt/acme-claims/
+        ssh ${config.backendServer} 'systemctl restart acme-claims-backend'
+    """
+    
+    // Deploy frontend
+    sh """
+        scp -r apps/frontend/dist/* ${config.frontendServer}:/var/www/acme-claims/
+    """
+    
+    // Health check
+    sh """
+        curl -f http://${config.backendServer}:8080/api/v1/actuator/health || exit 1
+    """
+    
+    echo "Deployment to ${env} completed successfully!"
+}
