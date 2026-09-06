@@ -40,6 +40,10 @@
 | [ADR-018](./ADR-018-manual-testing-subtypes.md) | Manual testing sub-types: UAT and Operational Readiness Testing | **Accepted** | This project | Test strategy, quality |
 | [ADR-019](./ADR-019-observability-tooling.md) | Observability tooling: Prometheus + Grafana + Loki + Tempo | **Accepted** | This project | Observability, operations |
 | [ADR-020](./ADR-020-ha-dr-targets.md) | High availability and disaster recovery targets (baseline, RPO/RTO TBD) | **Accepted** (Baseline - Targets TBD) | This project | Architecture, operations |
+| [ADR-021](./ADR-021-claims-lifecycle-state-machine.md) | Claim lifecycle state machine (FNOL → … → CLOSED, rejection path) | **Accepted** | This project | Claims API, web, testing |
+| [ADR-022](./ADR-022-money-minor-units.md) | Money as BIGINT minor units (single currency for v1) | **Accepted** | This project | Claims API, data architecture, web |
+| [ADR-023](./ADR-023-idempotency-keys.md) | Idempotency keys via an idempotency_keys table | **Accepted** | This project | Claims API, web, CI/CD |
+| [ADR-024](./ADR-024-uuidv7-application-side.md) | UUIDv7 primary keys, generated application-side | **Accepted** | This project | Data architecture, all services |
 
 ## Proposed (open for review)
 
