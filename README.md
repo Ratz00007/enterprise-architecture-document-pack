@@ -93,14 +93,14 @@ pnpm dev
 
 | Workstream | Status | Owner |
 |------------|--------|-------|
-| Architecture & ADRs | ✅ Foundation complete (ADR numbering gap 006–013 to reconcile) | Architect lead |
-| App API skeleton (Spring Boot) | 🟡 Baseline merged (PR #1) — rework + core endpoints in progress | Backend lead |
+| Architecture & ADRs | ✅ Foundation complete; register reconciled (ADR-006..013 written, ADR-021..024 added) | Architect lead |
+| App API skeleton (Spring Boot) | ✅ Core domain + REST implemented (FNOL→CLOSED, idempotency, OIDC); contract/E2E suites pending | Backend lead |
 | Web skeleton (React + TS) | 🟡 `package.json` only, no UI yet | Frontend lead |
-| GenAI gateway | 🟡 Scaffolded, config TBD | Platform lead |
+| GenAI gateway | 🟡 Client scaffolded in claims-api; gateway service itself not started | Platform lead |
 | DB sync pipeline | 🟡 Scaffolded, mechanism TBD | Data lead |
 | Observability | 🟡 Prometheus + Loki config drafted | SRE lead |
-| Security baseline | 🟡 Keycloak realm drafted | Security lead |
-| Test strategy | 🟡 Unit + contract scaffolded | QA lead |
+| Security baseline | 🟡 OIDC resource server live in API; realm config not in repo | Security lead |
+| Test strategy | 🟡 Unit suite green (54 tests, 98%/95% cov); Testcontainers suite needs Docker; contract/E2E pending | QA lead |
 
 ## License
 
