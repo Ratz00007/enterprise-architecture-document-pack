@@ -1,191 +1,208 @@
 package com.acme.claims.controller;
 
-import com.acme.claims.model.Claim;
+import com.acme.claims.domain.Claim;
+import com.acme.claims.domain.ClaimStatus;
+import com.acme.claims.dto.AdjudicationRequest;
+import com.acme.claims.dto.ApprovalRequest;
+import com.acme.claims.dto.ClaimResponse;
+import com.acme.claims.dto.CreateClaimRequest;
+import com.acme.claims.dto.PayoutRequest;
+import com.acme.claims.dto.RejectionRequest;
+import com.acme.claims.dto.TriageRequest;
 import com.acme.claims.service.ClaimService;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import com.acme.claims.service.IdempotencyService;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.http.HttpStatus;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
-import java.math.BigDecimal;
-import java.util.List;
-import java.util.Map;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 /**
- * Claim Controller - REST API endpoints for claim management
+ * Claims REST API. All state-mutating endpoints require an
+ * {@code Idempotency-Key} header (ADR-008); replays return the stored
+ * response with an {@code Idempotency-Replayed: true} header.
  */
 @RestController
 @RequestMapping("/claims")
-@RequiredArgsConstructor
-@Slf4j
 public class ClaimController {
 
+    public static final String IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
+    public static final String IDEMPOTENCY_REPLAYED_HEADER = "Idempotency-Replayed";
+
     private final ClaimService claimService;
+    private final IdempotencyService idempotencyService;
+    private final ObjectMapper objectMapper;
 
-    @GetMapping
-    public ResponseEntity<Page<Claim>> getAllClaims(Pageable pageable) {
-        return ResponseEntity.ok(claimService.getAllClaims(pageable));
-    }
-
-    @GetMapping("/{id}")
-    public ResponseEntity<Claim> getClaimById(@PathVariable UUID id) {
-        return claimService.getClaimById(id)
-            .map(ResponseEntity::ok)
-            .orElse(ResponseEntity.notFound().build());
+    public ClaimController(ClaimService claimService,
+                           IdempotencyService idempotencyService,
+                           ObjectMapper objectMapper) {
+        this.claimService = claimService;
+        this.idempotencyService = idempotencyService;
+        this.objectMapper = objectMapper;
     }
 
     @PostMapping
-    public ResponseEntity<Claim> createClaim(
-            @RequestBody Claim claim,
-            @AuthenticationPrincipal Jwt jwt) {
-        String userId = jwt.getSubject();
-        Claim createdClaim = claimService.createClaim(claim, userId);
-        return ResponseEntity.status(HttpStatus.CREATED).body(createdClaim);
+    public ResponseEntity<ClaimResponse> createClaim(
+        @Valid @RequestBody CreateClaimRequest request,
+        @RequestHeader(IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+        Jwt jwt,
+        HttpServletRequest http
+    ) {
+        return replayOrExecute(idempotencyKey, http, request, 201, () -> {
+            Claim claim = claimService.createClaim(request, jwt.getSubject());
+            return ClaimResponse.from(claim);
+        });
     }
 
-    @PutMapping("/{id}")
-    public ResponseEntity<Claim> updateClaim(
-            @PathVariable UUID id,
-            @RequestBody Claim updatedClaim,
-            @AuthenticationPrincipal Jwt jwt) {
-        String userId = jwt.getSubject();
-        try {
-            Claim claim = claimService.updateClaim(id, updatedClaim, userId);
-            return ResponseEntity.ok(claim);
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
-        }
+    @GetMapping
+    public Page<ClaimResponse> listClaims(
+        @RequestParam(required = false) ClaimStatus status,
+        @PageableDefault(size = 20) Pageable pageable
+    ) {
+        return claimService.list(status, pageable).map(ClaimResponse::from);
+    }
+
+    @GetMapping("/{id}")
+    public ClaimResponse getClaim(@PathVariable UUID id) {
+        return ClaimResponse.from(claimService.getById(id));
+    }
+
+    @GetMapping("/number/{claimNumber}")
+    public ClaimResponse getClaimByNumber(@PathVariable String claimNumber) {
+        return ClaimResponse.from(claimService.getByClaimNumber(claimNumber));
     }
 
     @PostMapping("/{id}/triage")
-    public ResponseEntity<Claim> transitionToTriage(
-            @PathVariable UUID id,
-            @RequestBody Map<String, Object> triageData,
-            @AuthenticationPrincipal Jwt jwt) {
-        String userId = jwt.getSubject();
-        int priority = (Integer) triageData.get("priority");
-        Double score = ((Number) triageData.get("score")).doubleValue();
-        try {
-            Claim claim = claimService.transitionToTriage(id, priority, score, userId);
-            return ResponseEntity.ok(claim);
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
-        }
+    public ResponseEntity<ClaimResponse> triage(
+        @PathVariable UUID id,
+        @Valid @RequestBody TriageRequest request,
+        @RequestHeader(IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+        Jwt jwt,
+        HttpServletRequest http
+    ) {
+        return replayOrExecute(idempotencyKey, http, request, 200,
+            () -> ClaimResponse.from(claimService.triage(id, request, jwt.getSubject())));
     }
 
     @PostMapping("/{id}/adjudication")
-    public ResponseEntity<Claim> transitionToAdjudication(
-            @PathVariable UUID id,
-            @RequestBody Map<String, String> adjudicationData,
-            @AuthenticationPrincipal Jwt jwt) {
-        String userId = jwt.getSubject();
-        String notes = adjudicationData.get("notes");
-        try {
-            Claim claim = claimService.transitionToAdjudication(id, notes, userId);
-            return ResponseEntity.ok(claim);
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
-        }
+    public ResponseEntity<ClaimResponse> beginAdjudication(
+        @PathVariable UUID id,
+        @Valid @RequestBody AdjudicationRequest request,
+        @RequestHeader(IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+        Jwt jwt,
+        HttpServletRequest http
+    ) {
+        return replayOrExecute(idempotencyKey, http, request, 200,
+            () -> ClaimResponse.from(claimService.beginAdjudication(id, request, jwt.getSubject())));
     }
 
     @PostMapping("/{id}/approve")
-    public ResponseEntity<Claim> approveClaim(
-            @PathVariable UUID id,
-            @RequestBody Map<String, BigDecimal> approvalData,
-            @AuthenticationPrincipal Jwt jwt) {
-        String userId = jwt.getSubject();
-        BigDecimal approvedAmount = approvalData.get("approvedAmount");
-        try {
-            Claim claim = claimService.approveClaim(id, approvedAmount, userId);
-            return ResponseEntity.ok(claim);
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
-        }
+    public ResponseEntity<ClaimResponse> approve(
+        @PathVariable UUID id,
+        @Valid @RequestBody ApprovalRequest request,
+        @RequestHeader(IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+        Jwt jwt,
+        HttpServletRequest http
+    ) {
+        return replayOrExecute(idempotencyKey, http, request, 200,
+            () -> ClaimResponse.from(claimService.approve(id, request, jwt.getSubject())));
     }
 
     @PostMapping("/{id}/reject")
-    public ResponseEntity<Claim> rejectClaim(
-            @PathVariable UUID id,
-            @RequestBody Map<String, String> rejectionData,
-            @AuthenticationPrincipal Jwt jwt) {
-        String userId = jwt.getSubject();
-        String reason = rejectionData.get("reason");
-        try {
-            Claim claim = claimService.rejectClaim(id, reason, userId);
-            return ResponseEntity.ok(claim);
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
-        }
+    public ResponseEntity<ClaimResponse> reject(
+        @PathVariable UUID id,
+        @Valid @RequestBody RejectionRequest request,
+        @RequestHeader(IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+        Jwt jwt,
+        HttpServletRequest http
+    ) {
+        return replayOrExecute(idempotencyKey, http, request, 200,
+            () -> ClaimResponse.from(claimService.reject(id, request, jwt.getSubject())));
     }
 
-    @PostMapping("/{id}/payout/process")
-    public ResponseEntity<Claim> processPayout(
-            @PathVariable UUID id,
-            @RequestBody Map<String, String> payoutData,
-            @AuthenticationPrincipal Jwt jwt) {
-        String userId = jwt.getSubject();
-        String payoutReference = payoutData.get("payoutReference");
-        try {
-            Claim claim = claimService.processPayout(id, payoutReference, userId);
-            return ResponseEntity.ok(claim);
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
-        }
+    @PostMapping("/{id}/payout")
+    public ResponseEntity<ClaimResponse> payout(
+        @PathVariable UUID id,
+        @Valid @RequestBody PayoutRequest request,
+        @RequestHeader(IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+        Jwt jwt,
+        HttpServletRequest http
+    ) {
+        return replayOrExecute(idempotencyKey, http, request, 200,
+            () -> ClaimResponse.from(claimService.payout(id, request, jwt.getSubject())));
     }
 
     @PostMapping("/{id}/payout/complete")
-    public ResponseEntity<Claim> completePayout(
-            @PathVariable UUID id,
-            @AuthenticationPrincipal Jwt jwt) {
-        String userId = jwt.getSubject();
-        try {
-            Claim claim = claimService.completePayout(id, userId);
-            return ResponseEntity.ok(claim);
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
-        }
+    public ResponseEntity<ClaimResponse> completePayout(
+        @PathVariable UUID id,
+        @RequestHeader(IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+        Jwt jwt,
+        HttpServletRequest http
+    ) {
+        return replayOrExecute(idempotencyKey, http, "", 200,
+            () -> ClaimResponse.from(claimService.completePayout(id, jwt.getSubject())));
     }
 
     @PostMapping("/{id}/close")
-    public ResponseEntity<Claim> closeClaim(
-            @PathVariable UUID id,
-            @AuthenticationPrincipal Jwt jwt) {
-        String userId = jwt.getSubject();
+    public ResponseEntity<ClaimResponse> close(
+        @PathVariable UUID id,
+        @RequestHeader(IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+        Jwt jwt,
+        HttpServletRequest http
+    ) {
+        return replayOrExecute(idempotencyKey, http, "", 200,
+            () -> ClaimResponse.from(claimService.close(id, jwt.getSubject())));
+    }
+
+    private ResponseEntity<ClaimResponse> replayOrExecute(
+        String idempotencyKey,
+        HttpServletRequest http,
+        Object requestBody,
+        int successStatus,
+        Supplier<ClaimResponse> action
+    ) {
+        String endpoint = http.getMethod() + " " + http.getRequestURI();
+        String requestHash = idempotencyService.hashOf(requestBody);
+
+        return idempotencyService.replayFor(idempotencyKey, endpoint, requestHash)
+            .<ResponseEntity<ClaimResponse>>map(replay -> ResponseEntity.status(replay.status())
+                .header(IDEMPOTENCY_REPLAYED_HEADER, "true")
+                .body(readResponse(replay.body())))
+            .orElseGet(() -> {
+                ClaimResponse response = action.get();
+                idempotencyService.record(idempotencyKey, endpoint, requestHash, successStatus,
+                    writeResponse(response));
+                return ResponseEntity.status(successStatus).body(response);
+            });
+    }
+
+    private String writeResponse(ClaimResponse response) {
         try {
-            Claim claim = claimService.closeClaim(id, userId);
-            return ResponseEntity.ok(claim);
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
+            return objectMapper.writeValueAsString(response);
+        } catch (com.fasterxml.jackson.core.JacksonException e) {
+            throw new IllegalStateException("Response is not serializable", e);
         }
     }
 
-    @GetMapping("/status/{status}")
-    public ResponseEntity<Page<Claim>> getClaimsByStatus(
-            @PathVariable Claim.ClaimStatus status,
-            Pageable pageable) {
-        return ResponseEntity.ok(claimService.getClaimsByStatus(status, pageable));
-    }
-
-    @GetMapping("/high-priority")
-    public ResponseEntity<List<Claim>> getHighPriorityClaims(
-            @RequestParam Claim.ClaimStatus status,
-            @RequestParam int minPriority) {
-        return ResponseEntity.ok(claimService.getHighPriorityClaims(status, minPriority));
-    }
-
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteClaim(@PathVariable UUID id) {
+    private ClaimResponse readResponse(String json) {
         try {
-            claimService.deleteClaim(id);
-            return ResponseEntity.noContent().build();
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
+            return objectMapper.readValue(json, ClaimResponse.class);
+        } catch (com.fasterxml.jackson.core.JacksonException e) {
+            throw new IllegalStateException("Stored idempotency response is not deserializable", e);
         }
     }
 }

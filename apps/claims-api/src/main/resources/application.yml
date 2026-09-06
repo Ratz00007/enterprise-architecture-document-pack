@@ -22,59 +22,41 @@ spring:
   jpa:
     hibernate:
       ddl-auto: validate
-    show-sql: false
+    open-in-view: false
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
-        format_sql: true
-        use_sql_comments: true
-    open-in-view: false
+        jdbc:
+          time_zone: UTC
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8180/realms/acme-claims}
   cache:
     type: caffeine
     caffeine:
       spec: maximumSize=10000,expireAfterAccess=600s
 
-# Keycloak Configuration
-keycloak:
-  enabled: true
-  auth-server-url: ${KEYCLOAK_URL:http://localhost:8180}
-  realm: ${KEYCLOAK_REALM:acme-claims}
-  resource: ${KEYCLOAK_CLIENT_ID:claims-api}
-  credentials:
-    secret: ${KEYCLOAK_CLIENT_SECRET:backend-secret}
-  principal-attribute: preferred_username
-  bearer-only: true
-
-# GenAI Gateway Configuration
 genai:
   gateway:
     url: ${GENAI_GATEWAY_URL:http://localhost:9000}
     api-key: ${GENAI_API_KEY:dev-api-key}
-    timeout: 30000
-    retry:
-      max-attempts: 3
-      backoff-ms: 1000
 
-# OpenTelemetry Configuration
 otel:
   service:
     name: claims-api
   exporter:
     otlp:
       endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4317}
-  metrics:
-    export:
-      interval: 10000
 
-# Actuator Endpoints
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,prometheus,threaddump,heapdump
+        include: health,info,metrics,prometheus
   endpoint:
     health:
-      show-details: always
+      show-details: when-authorized
       probes:
         enabled: true
   metrics:
@@ -82,39 +64,7 @@ management:
       prometheus:
         enabled: true
 
-# Application-specific settings
-acme:
-  claims:
-    workflow:
-      stages:
-        - FNOL
-        - TRIAGE
-        - ADJUDICATION
-        - PAYOUT
-      sla:
-        fnol-to-triage-hours: 24
-        triage-to-adjudication-hours: 48
-        adjudication-to-payout-hours: 72
-    pii:
-      masking-enabled: true
-      encryption-algorithm: AES-256-GCM
-    database:
-      operational:
-        name: acme_claims_ops
-      analytics:
-        name: acme_claims_analytics
-      sync-interval-ms: 5000
-
-# Logging Configuration
 logging:
   level:
     root: INFO
     com.acme.claims: DEBUG
-    org.springframework.security: DEBUG
-    org.keycloak: INFO
-    io.opentelemetry: INFO
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - trace_id=%X{trace_id} span_id=%X{span_id} - %msg%n"
-    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - trace_id=%X{trace_id} span_id=%X{span_id} - %msg%n"
-  file:
-    name: /var/log/acme-claims/backend.log

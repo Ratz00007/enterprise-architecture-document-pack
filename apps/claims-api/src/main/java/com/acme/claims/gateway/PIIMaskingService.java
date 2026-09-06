@@ -1,18 +1,19 @@
 package com.acme.claims.gateway;
 
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.util.regex.Pattern;
 
 /**
- * PII Masking Service - Masks sensitive data before syncing to analytics database
- * 
- * Implements two-database sync with PII masking as per ADR-013
+ * PII Masking Service - Masks sensitive data before syncing to analytics database.
+ * Masking rules live in data/masking/masking-rules.json (ADR-017).
  */
 @Service
-@Slf4j
 public class PIIMaskingService {
+
+    private static final Logger log = LoggerFactory.getLogger(PIIMaskingService.class);
 
     private static final Pattern SSN_PATTERN = Pattern.compile("\\b\\d{3}-\\d{2}-\\d{4}\\b");
     private static final Pattern PHONE_PATTERN = Pattern.compile("\\b\\d{3}[-.]?\\d{3}[-.]?\\d{4}\\b");

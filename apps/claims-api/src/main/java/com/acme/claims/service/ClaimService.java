@@ -1,186 +1,164 @@
 package com.acme.claims.service;
 
-import com.acme.claims.model.Claim;
+import com.acme.claims.domain.Claim;
+import com.acme.claims.domain.ClaimNotFoundException;
+import com.acme.claims.domain.ClaimStatus;
+import com.acme.claims.dto.AdjudicationRequest;
+import com.acme.claims.dto.ApprovalRequest;
+import com.acme.claims.dto.CreateClaimRequest;
+import com.acme.claims.dto.PayoutRequest;
+import com.acme.claims.dto.RejectionRequest;
+import com.acme.claims.dto.TriageRequest;
 import com.acme.claims.repository.ClaimRepository;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import com.acme.claims.util.UuidV7;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Optional;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.util.HexFormat;
+import java.util.Locale;
 import java.util.UUID;
 
 /**
- * Claim Service - Business logic for claim processing
- * 
- * Handles the complete workflow: FNOL → Triage → Adjudication → Payout
+ * Claim lifecycle business logic. Every state change validates against the
+ * {@link ClaimStatus} state machine; there is no delete operation because
+ * claims are part of the audit trail.
  */
 @Service
-@RequiredArgsConstructor
-@Slf4j
 public class ClaimService {
 
-    private final ClaimRepository claimRepository;
+    private static final Logger log = LoggerFactory.getLogger(ClaimService.class);
+    private static final DateTimeFormatter CLAIM_NUMBER_DATE =
+        DateTimeFormatter.ofPattern("yyyyMMdd", Locale.ROOT).withZone(ZoneOffset.UTC);
 
-    @Transactional(readOnly = true)
-    public Page<Claim> getAllClaims(Pageable pageable) {
-        return claimRepository.findAll(pageable);
+    private final ClaimRepository claims;
+
+    public ClaimService(ClaimRepository claims) {
+        this.claims = claims;
     }
 
     @Transactional(readOnly = true)
-    public Optional<Claim> getClaimById(UUID id) {
-        return claimRepository.findById(id);
+    public Claim getById(UUID id) {
+        return claims.findById(id).orElseThrow(() -> new ClaimNotFoundException(id));
     }
 
     @Transactional(readOnly = true)
-    public Optional<Claim> getClaimByNumber(String claimNumber) {
-        return claimRepository.findAll()
-            .stream()
-            .filter(c -> c.getClaimNumber().equals(claimNumber))
-            .findFirst();
+    public Claim getByClaimNumber(String claimNumber) {
+        return claims.findByClaimNumber(claimNumber).orElseThrow(() -> new ClaimNotFoundException(claimNumber));
+    }
+
+    @Transactional(readOnly = true)
+    public Page<Claim> list(ClaimStatus status, Pageable pageable) {
+        return status == null ? claims.findAll(pageable) : claims.findByStatus(status, pageable);
     }
 
     @Transactional
-    public Claim createClaim(Claim claim, String userId) {
-        claim.setStatus(Claim.ClaimStatus.FNOL);
+    public Claim createClaim(CreateClaimRequest request, String userId) {
+        Claim claim = new Claim();
+        claim.setClaimNumber(nextClaimNumber());
+        claim.setPolicyNumber(request.policyNumber());
+        claim.setClaimType(request.claimType());
+        claim.setIncidentDate(request.incidentDate());
+        claim.setReportedDate(Instant.now());
+        claim.setDescription(request.description());
+        claim.setEstimatedAmountMinor(request.estimatedAmountMinor());
+        claim.setStatus(ClaimStatus.FNOL);
         claim.setCreatedBy(userId);
-        claim.setCreatedAt(LocalDateTime.now());
-        log.info("Creating new claim: {}", claim.getClaimNumber());
-        return claimRepository.save(claim);
+        log.info("Claim {} created for policy {} by {}", claim.getClaimNumber(), claim.getPolicyNumber(), userId);
+        return claims.save(claim);
     }
 
     @Transactional
-    public Claim updateClaim(UUID id, Claim updatedClaim, String userId) {
-        return claimRepository.findById(id)
-            .map(existingClaim -> {
-                existingClaim.setStatus(updatedClaim.getStatus());
-                existingClaim.setDescription(updatedClaim.getDescription());
-                existingClaim.setEstimatedAmount(updatedClaim.getEstimatedAmount());
-                existingClaim.setAssignedTo(updatedClaim.getAssignedTo());
-                existingClaim.setUpdatedBy(userId);
-                log.info("Updating claim: {}", id);
-                return claimRepository.save(existingClaim);
-            })
-            .orElseThrow(() -> new RuntimeException("Claim not found with id: " + id));
+    public Claim triage(UUID id, TriageRequest request, String userId) {
+        Claim claim = claims.findById(id).orElseThrow(() -> new ClaimNotFoundException(id));
+        claim.transitionTo(ClaimStatus.TRIAGE);
+        claim.setTriagePriority(request.priority());
+        claim.setTriageScore(request.score());
+        claim.setAssignedTo(request.assignedTo());
+        claim.setUpdatedBy(userId);
+        log.info("Claim {} moved to TRIAGE with priority {}", claim.getClaimNumber(), request.priority());
+        return claims.save(claim);
     }
 
     @Transactional
-    public Claim transitionToTriage(UUID id, int priority, Double score, String userId) {
-        return claimRepository.findById(id)
-            .map(claim -> {
-                claim.setStatus(Claim.ClaimStatus.TRIAGE);
-                claim.setTriagePriority(priority);
-                claim.setTriageScore(score);
-                claim.setUpdatedBy(userId);
-                log.info("Claim {} transitioned to TRIAGE with priority: {}", id, priority);
-                return claimRepository.save(claim);
-            })
-            .orElseThrow(() -> new RuntimeException("Claim not found with id: " + id));
+    public Claim beginAdjudication(UUID id, AdjudicationRequest request, String userId) {
+        Claim claim = claims.findById(id).orElseThrow(() -> new ClaimNotFoundException(id));
+        claim.transitionTo(ClaimStatus.ADJUDICATION);
+        claim.setAdjudicationNotes(request.notes());
+        claim.setUpdatedBy(userId);
+        log.info("Claim {} moved to ADJUDICATION", claim.getClaimNumber());
+        return claims.save(claim);
     }
 
     @Transactional
-    public Claim transitionToAdjudication(UUID id, String notes, String userId) {
-        return claimRepository.findById(id)
-            .map(claim -> {
-                claim.setStatus(Claim.ClaimStatus.ADJUDICATION);
-                claim.setAdjudicationNotes(notes);
-                claim.setUpdatedBy(userId);
-                log.info("Claim {} transitioned to ADJUDICATION", id);
-                return claimRepository.save(claim);
-            })
-            .orElseThrow(() -> new RuntimeException("Claim not found with id: " + id));
+    public Claim approve(UUID id, ApprovalRequest request, String userId) {
+        Claim claim = claims.findById(id).orElseThrow(() -> new ClaimNotFoundException(id));
+        claim.transitionTo(ClaimStatus.APPROVED);
+        claim.setApprovedAmountMinor(request.approvedAmountMinor());
+        claim.setUpdatedBy(userId);
+        log.info("Claim {} approved for {} minor units", claim.getClaimNumber(), request.approvedAmountMinor());
+        return claims.save(claim);
     }
 
     @Transactional
-    public Claim approveClaim(UUID id, BigDecimal approvedAmount, String userId) {
-        return claimRepository.findById(id)
-            .map(claim -> {
-                claim.setStatus(Claim.ClaimStatus.APPROVED);
-                claim.setApprovedAmount(approvedAmount);
-                claim.setUpdatedBy(userId);
-                log.info("Claim {} approved with amount: {}", id, approvedAmount);
-                return claimRepository.save(claim);
-            })
-            .orElseThrow(() -> new RuntimeException("Claim not found with id: " + id));
+    public Claim reject(UUID id, RejectionRequest request, String userId) {
+        Claim claim = claims.findById(id).orElseThrow(() -> new ClaimNotFoundException(id));
+        claim.transitionTo(ClaimStatus.REJECTED);
+        claim.setRejectionReason(request.reason());
+        claim.setUpdatedBy(userId);
+        log.info("Claim {} rejected", claim.getClaimNumber());
+        return claims.save(claim);
     }
 
     @Transactional
-    public Claim rejectClaim(UUID id, String rejectionReason, String userId) {
-        return claimRepository.findById(id)
-            .map(claim -> {
-                claim.setStatus(Claim.ClaimStatus.REJECTED);
-                claim.setAdjudicationNotes(rejectionReason);
-                claim.setUpdatedBy(userId);
-                log.info("Claim {} rejected. Reason: {}", id, rejectionReason);
-                return claimRepository.save(claim);
-            })
-            .orElseThrow(() -> new RuntimeException("Claim not found with id: " + id));
-    }
-
-    @Transactional
-    public Claim processPayout(UUID id, String payoutReference, String userId) {
-        return claimRepository.findById(id)
-            .map(claim -> {
-                claim.setStatus(Claim.ClaimStatus.PAYOUT);
-                claim.setPayoutReference(payoutReference);
-                claim.setPayoutDate(LocalDateTime.now());
-                claim.setUpdatedBy(userId);
-                log.info("Payout processing initiated for claim: {} with reference: {}", id, payoutReference);
-                return claimRepository.save(claim);
-            })
-            .orElseThrow(() -> new RuntimeException("Claim not found with id: " + id));
+    public Claim payout(UUID id, PayoutRequest request, String userId) {
+        Claim claim = claims.findById(id).orElseThrow(() -> new ClaimNotFoundException(id));
+        claim.transitionTo(ClaimStatus.PAYOUT);
+        claim.setPayoutReference(request.payoutReference());
+        claim.setPayoutDate(Instant.now());
+        claim.setUpdatedBy(userId);
+        log.info("Claim {} payout initiated (reference {})", claim.getClaimNumber(), request.payoutReference());
+        return claims.save(claim);
     }
 
     @Transactional
     public Claim completePayout(UUID id, String userId) {
-        return claimRepository.findById(id)
-            .map(claim -> {
-                claim.setStatus(Claim.ClaimStatus.PAID);
-                claim.setPaidAmount(claim.getApprovedAmount());
-                claim.setUpdatedBy(userId);
-                log.info("Payout completed for claim: {}", id);
-                return claimRepository.save(claim);
-            })
-            .orElseThrow(() -> new RuntimeException("Claim not found with id: " + id));
+        Claim claim = claims.findById(id).orElseThrow(() -> new ClaimNotFoundException(id));
+        claim.transitionTo(ClaimStatus.PAID);
+        claim.setPaidAmountMinor(claim.getApprovedAmountMinor());
+        claim.setUpdatedBy(userId);
+        log.info("Claim {} payout completed", claim.getClaimNumber());
+        return claims.save(claim);
     }
 
     @Transactional
-    public Claim closeClaim(UUID id, String userId) {
-        return claimRepository.findById(id)
-            .map(claim -> {
-                claim.setStatus(Claim.ClaimStatus.CLOSED);
-                claim.setUpdatedBy(userId);
-                log.info("Claim {} closed", id);
-                return claimRepository.save(claim);
-            })
-            .orElseThrow(() -> new RuntimeException("Claim not found with id: " + id));
+    public Claim close(UUID id, String userId) {
+        Claim claim = claims.findById(id).orElseThrow(() -> new ClaimNotFoundException(id));
+        claim.transitionTo(ClaimStatus.CLOSED);
+        claim.setUpdatedBy(userId);
+        log.info("Claim {} closed", claim.getClaimNumber());
+        return claims.save(claim);
     }
 
-    @Transactional(readOnly = true)
-    public Page<Claim> getClaimsByStatus(Claim.ClaimStatus status, Pageable pageable) {
-        return claimRepository.findByStatus(status, pageable);
-    }
-
-    @Transactional(readOnly = true)
-    public List<Claim> getHighPriorityClaims(Claim.ClaimStatus status, int minPriority) {
-        return claimRepository.findHighPriorityClaimsByStatus(status, minPriority);
-    }
-
-    @Transactional(readOnly = true)
-    public long getClaimCountByStatus(Claim.ClaimStatus status) {
-        return claimRepository.countByStatus(status);
-    }
-
-    @Transactional
-    public void deleteClaim(UUID id) {
-        if (!claimRepository.existsById(id)) {
-            throw new RuntimeException("Claim not found with id: " + id);
+    private String nextClaimNumber() {
+        String date = CLAIM_NUMBER_DATE.format(Instant.now());
+        for (int attempt = 0; attempt < 3; attempt++) {
+            String candidate = "CLM-%s-%s".formatted(date, randomSuffix());
+            if (!claims.existsByClaimNumber(candidate)) {
+                return candidate;
+            }
         }
-        claimRepository.deleteById(id);
-        log.info("Claim {} deleted", id);
+        throw new IllegalStateException("Could not generate a unique claim number");
+    }
+
+    private String randomSuffix() {
+        String hex = UuidV7.randomUUID().toString().replace("-", "");
+        return hex.substring(0, 6).toUpperCase(Locale.ROOT);
     }
 }
