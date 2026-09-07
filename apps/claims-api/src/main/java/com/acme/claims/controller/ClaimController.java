@@ -18,6 +18,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -59,7 +60,7 @@ public class ClaimController {
     public ResponseEntity<ClaimResponse> createClaim(
         @Valid @RequestBody CreateClaimRequest request,
         @RequestHeader(IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-        Jwt jwt,
+        @AuthenticationPrincipal Jwt jwt,
         HttpServletRequest http
     ) {
         return replayOrExecute(idempotencyKey, http, request, 201, () -> {
@@ -91,7 +92,7 @@ public class ClaimController {
         @PathVariable UUID id,
         @Valid @RequestBody TriageRequest request,
         @RequestHeader(IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-        Jwt jwt,
+        @AuthenticationPrincipal Jwt jwt,
         HttpServletRequest http
     ) {
         return replayOrExecute(idempotencyKey, http, request, 200,
@@ -103,7 +104,7 @@ public class ClaimController {
         @PathVariable UUID id,
         @Valid @RequestBody AdjudicationRequest request,
         @RequestHeader(IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-        Jwt jwt,
+        @AuthenticationPrincipal Jwt jwt,
         HttpServletRequest http
     ) {
         return replayOrExecute(idempotencyKey, http, request, 200,
@@ -115,7 +116,7 @@ public class ClaimController {
         @PathVariable UUID id,
         @Valid @RequestBody ApprovalRequest request,
         @RequestHeader(IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-        Jwt jwt,
+        @AuthenticationPrincipal Jwt jwt,
         HttpServletRequest http
     ) {
         return replayOrExecute(idempotencyKey, http, request, 200,
@@ -127,7 +128,7 @@ public class ClaimController {
         @PathVariable UUID id,
         @Valid @RequestBody RejectionRequest request,
         @RequestHeader(IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-        Jwt jwt,
+        @AuthenticationPrincipal Jwt jwt,
         HttpServletRequest http
     ) {
         return replayOrExecute(idempotencyKey, http, request, 200,
@@ -139,7 +140,7 @@ public class ClaimController {
         @PathVariable UUID id,
         @Valid @RequestBody PayoutRequest request,
         @RequestHeader(IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-        Jwt jwt,
+        @AuthenticationPrincipal Jwt jwt,
         HttpServletRequest http
     ) {
         return replayOrExecute(idempotencyKey, http, request, 200,
@@ -150,7 +151,7 @@ public class ClaimController {
     public ResponseEntity<ClaimResponse> completePayout(
         @PathVariable UUID id,
         @RequestHeader(IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-        Jwt jwt,
+        @AuthenticationPrincipal Jwt jwt,
         HttpServletRequest http
     ) {
         return replayOrExecute(idempotencyKey, http, "", 200,
@@ -161,7 +162,7 @@ public class ClaimController {
     public ResponseEntity<ClaimResponse> close(
         @PathVariable UUID id,
         @RequestHeader(IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-        Jwt jwt,
+        @AuthenticationPrincipal Jwt jwt,
         HttpServletRequest http
     ) {
         return replayOrExecute(idempotencyKey, http, "", 200,
