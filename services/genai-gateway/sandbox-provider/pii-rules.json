@@ -1,0 +1,8 @@
+{
+  "deny_patterns": [
+    { "id": "ssn", "pattern": "\\b\\d{3}-\\d{2}-\\d{4}\\b" },
+    { "id": "credit-card", "pattern": "\\b(?:\\d{4}[- ]?){3}\\d{4}\\b" },
+    { "id": "email", "pattern": "\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b" },
+    { "id": "phone", "pattern": "\\b\\d{3}[-.]?\\d{3}[-.]?\\d{4}\\b" }
+  ]
+}

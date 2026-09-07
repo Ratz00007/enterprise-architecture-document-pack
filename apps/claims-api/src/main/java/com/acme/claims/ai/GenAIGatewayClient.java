@@ -8,19 +8,18 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import java.util.List;
 
 /**
- * GenAI gateway client (ADR-004, ADR-005). The gateway is vendor-neutral and
- * advisory only: its assessments feed human decisions and are never executed
- * automatically.
+ * GenAI gateway client (ADR-004, ADR-005, ADR-011). The gateway is
+ * vendor-neutral (LiteLLM) and advisory only: its assessments feed human
+ * decisions and are never executed automatically.
+ *
+ * <p>The only route used is the OpenAI-compatible chat completion; domain
+ * prompts (e.g. triage assessment) are composed by callers on top of it.</p>
  */
 @FeignClient(name = "genai-gateway", url = "${genai.gateway.url:http://localhost:9000}")
 public interface GenAIGatewayClient {
 
     @PostMapping("/v1/chat/completions")
     GenAIResponse chatCompletion(@RequestHeader("Authorization") String apiKey, @RequestBody GenAIRequest request);
-
-    @PostMapping("/v1/triage/assess")
-    TriageAssessment assessClaim(@RequestHeader("Authorization") String apiKey,
-                                 @RequestBody ClaimAssessmentRequest request);
 
     record GenAIRequest(String model, List<Message> messages, Double temperature, Integer maxTokens) {
 
@@ -55,13 +54,5 @@ public interface GenAIGatewayClient {
         public String getContent() {
             return choices == null || choices.isEmpty() ? null : choices.getFirst().message().content();
         }
-    }
-
-    record ClaimAssessmentRequest(String claimId, String claimType, String description,
-                                  Long estimatedAmountMinor, String policyDetails) {
-    }
-
-    record TriageAssessment(String claimId, Integer priority, Double score, String recommendation,
-                            List<String> requiredDocuments, boolean requiresHumanReview, String reasoning) {
     }
 }
