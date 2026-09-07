@@ -1,0 +1,21 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 30s
+
+scrape_configs:
+  - job_name: claims-api
+    metrics_path: /api/v1/actuator/prometheus
+    static_configs:
+      - targets: ["claims-api:8080"]
+        labels:
+          env: dev
+
+  - job_name: genai-gateway
+    static_configs:
+      - targets: ["genai-gateway:4000"]
+        labels:
+          env: dev
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
