@@ -1,0 +1,23 @@
+[Unit]
+Description=Acme Claims API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=acme
+Group=acme
+EnvironmentFile=/opt/acme-claims/claims-api.env
+ExecStart=/usr/bin/java -XX:MaxRAMPercentage=75 -jar /opt/acme-claims/claims-api.jar
+SuccessExitStatus=143
+Restart=on-failure
+RestartSec=5
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/acme-claims/logs
+
+[Install]
+WantedBy=multi-user.target

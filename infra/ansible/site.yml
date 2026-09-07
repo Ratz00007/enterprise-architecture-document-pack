@@ -1,0 +1,124 @@
+---
+# Acme Claims bare-metal provisioning (ADR-001: physical servers, no
+# virtualization; ADR-002/ADR-003: four sequential environments on one VLAN,
+# logically separated with host firewalls).
+#
+#   ansible-playbook -i inventory.ini site.yml --limit dev1
+#
+# Secrets (DB passwords, Keycloak admin) come from Ansible Vault:
+#   ansible-vault edit group_vars/all/vault.yml
+- name: Common baseline for every Acme host
+  hosts: acme
+  become: true
+  tasks:
+    - name: Base packages
+      ansible.builtin.apt:
+        name:
+          - openjdk-21-jre-headless
+          - nftables
+          - unattended-upgrades
+        state: present
+        update_cache: true
+
+    - name: Host firewall baseline (ADR-003 compensating controls)
+      ansible.builtin.template:
+        src: templates/nftables.conf.j2
+        dest: /etc/nftables.conf
+        mode: "0640"
+      notify: reload nftables
+
+    - name: Enable nftables
+      ansible.builtin.systemd:
+        name: nftables
+        enabled: true
+        state: started
+
+    - name: Service account
+      ansible.builtin.user:
+        name: acme
+        system: true
+        home: /opt/acme-claims
+        shell: /usr/sbin/nologin
+
+  handlers:
+    - name: reload nftables
+      ansible.builtin.systemd:
+        name: nftables
+        state: reloaded
+
+- name: Claims API servers
+  hosts: api
+  become: true
+  vars:
+    # ADR-007: exactly two DB instances (QA + Prod); dev and uat ride the QA
+    # instance, prod has its own.
+    env_db_map: { dev: qa, qa: qa, uat: qa, prod: prod }
+  tasks:
+    - name: Resolve database host for this environment
+      ansible.builtin.set_fact:
+        db_host: "{{ groups['db'] | select('search', env_db_map[env_name]) | first }}"
+
+    - name: Application directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: acme
+        mode: "0750"
+      loop:
+        - /opt/acme-claims
+        - /opt/acme-claims/logs
+
+    - name: systemd unit
+      ansible.builtin.copy:
+        src: ../systemd/claims-api.service
+        dest: /etc/systemd/system/claims-api.service
+        mode: "0644"
+      notify: restart claims-api
+
+    - name: Environment file (values from Vault)
+      ansible.builtin.copy:
+        content: |
+          DB_HOST={{ db_host }}
+          DB_NAME=acme_claims
+          DB_USER={{ vault_db_user }}
+          DB_PASSWORD={{ vault_db_password }}
+          KEYCLOAK_ISSUER_URI=https://keycloak.acme.internal/realms/acme-claims
+          KEYCLOAK_JWK_SET_URI=https://keycloak.acme.internal/realms/acme-claims/protocol/openid-connect/certs
+        dest: /opt/acme-claims/claims-api.env
+        mode: "0600"
+      no_log: true
+      notify: restart claims-api
+
+    - name: Enable claims-api
+      ansible.builtin.systemd:
+        name: claims-api
+        enabled: true
+        state: started
+        daemon_reload: true
+
+  handlers:
+    - name: restart claims-api
+      ansible.builtin.systemd:
+        name: claims-api
+        state: restarted
+
+- name: Monitoring server
+  hosts: monitoring
+  become: true
+  tasks:
+    - name: Docker (container runtime for the observability stack only)
+      ansible.builtin.apt:
+        name: [docker.io, docker-compose-v2]
+        state: present
+
+    - name: Monitoring configs
+      ansible.builtin.copy:
+        src: ../monitoring/
+        dest: /opt/acme-monitoring/
+        mode: preserve
+
+    - name: Observability stack up
+      ansible.builtin.command:
+        cmd: docker compose up -d
+        chdir: /opt/acme-monitoring
+      changed_when: false
