@@ -18,6 +18,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.MountableFile;
 
+import java.nio.file.Path;
 import java.nio.file.Paths;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
@@ -36,13 +37,56 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @Testcontainers(disabledWithoutDocker = true)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+@SuppressWarnings("resource")
 class ClaimApiIntegrationTest {
 
-    @Container
-    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine")
-        .withCopyFileToContainer(
-            MountableFile.forHostPath(Paths.get("..", "data", "schemas", "001_initial_schema.sql")),
-            "/docker-entrypoint-initdb.d/001_initial_schema.sql");
+    /** The repo's canonical schema, resolved regardless of the surefire working directory. */
+    private static final Path SCHEMA_FILE = findSchemaFile();
+
+    private static Path findSchemaFile() {
+        Path cwd = Paths.get(System.getProperty("user.dir")).toAbsolutePath().normalize();
+        for (Path base : java.util.List.of(cwd, cwd.getParent(), cwd.getParent() == null ? cwd : cwd.getParent().getParent())) {
+            if (base == null) {
+                continue;
+            }
+            Path candidate = base.resolve("data").resolve("schemas").resolve("001_initial_schema.sql");
+            if (java.nio.file.Files.exists(candidate)) {
+                return candidate;
+            }
+        }
+        throw new IllegalStateException("001_initial_schema.sql not found upward from " + cwd);
+    }
+
+    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
+
+    // Applied over JDBC instead of docker-entrypoint-initdb.d so the schema
+    // source (data/schemas) stays the single source of truth and failures are
+    // loud in the test output.
+    static {
+        POSTGRES.start();
+        applySchema();
+    }
+
+    private static void applySchema() {
+        String sql;
+        try {
+            sql = java.nio.file.Files.readString(SCHEMA_FILE);
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException("Cannot read " + SCHEMA_FILE, e);
+        }
+        try (java.sql.Connection connection = java.sql.DriverManager.getConnection(
+            POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+             java.sql.Statement statement = connection.createStatement()) {
+            for (String part : sql.split(";")) {
+                String trimmed = part.strip();
+                if (!trimmed.isEmpty()) {
+                    statement.execute(trimmed);
+                }
+            }
+        } catch (java.sql.SQLException e) {
+            throw new IllegalStateException("Schema application failed", e);
+        }
+    }
 
     @DynamicPropertySource
     static void datasource(DynamicPropertyRegistry registry) {
@@ -54,7 +98,10 @@ class ClaimApiIntegrationTest {
     @Autowired
     private MockMvc mockMvc;
 
-    private static final RequestPostProcessor ADJUSTER = jwt().jwt(jwt -> jwt.subject("adjuster-1"));
+    private static final RequestPostProcessor ADJUSTER = jwt().jwt(jwt -> {
+        jwt.subject("adjuster-1");
+        jwt.issuer("http://localhost:8180/realms/acme-claims");
+    });
 
     private static String createBody() {
         return """

@@ -1,0 +1,25 @@
+# LiteLLM gateway configuration (ADR-004, ADR-005, ADR-011).
+#
+# Vendor neutrality lives here, not in code: swapping providers is a change
+# to this file plus environment variables, never to applications.
+#
+# Dev default: the "acme-advisory" model routes to the local sandbox provider
+# (services/genai-gateway/sandbox-provider) so the full stack runs with no
+# external vendor, no API keys, and no data leaving the machine.
+# Production: point OPENAI_API_BASE-style env vars at the approved provider
+# and set the master key from the secret store (Ansible Vault), never in git.
+
+model_list:
+  - model_name: acme-advisory
+    litellm_params:
+      model: openai/acme-sandbox
+      api_base: ${GENAI_UPSTREAM_BASE_URL:http://sandbox-provider:9100/v1}
+      api_key: ${GENAI_UPSTREAM_API_KEY:sandbox-not-a-secret}
+
+litellm_settings:
+  # Advisory-only posture (ADR-011): nothing here may execute actions; the
+  # gateway returns assessments that humans consume.
+  drop_params: true
+
+general_settings:
+  master_key: ${GENAI_MASTER_KEY:sk-dev-master-key-not-for-prod}

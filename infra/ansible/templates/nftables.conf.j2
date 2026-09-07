@@ -1,0 +1,33 @@
+#!/usr/sbin/nftables
+# Baseline ruleset for Acme Claims hosts (DINA §3: explicit allowed flows only,
+# logical separation on a shared VLAN compensated by host firewalls).
+# Rendered per-host by Ansible; {{ allowed_sources }} is the management/Jenkins
+# subnet, {{ env_subnet }} the application environments.
+
+flush ruleset
+
+table inet filter {
+  chain input {
+    type filter hook input priority 0; policy drop;
+    iif lo accept
+    ct state established,related accept
+    icmp type { echo-request, destination-unreachable, time-exceeded } accept
+
+    # Management (SSH) from the operations subnet only
+    ip saddr {{ allowed_sources }} tcp dport 22 accept
+
+    # API: reachable from the LB and the same-environment web tier
+    ip saddr { {{ allowed_sources }}, {{ env_subnet }} } tcp dport 8080 accept
+
+    # Prometheus scraping from the monitoring host only
+    ip saddr {{ monitoring_host }} tcp dport { 9090, 9100 } accept
+  }
+
+  chain forward {
+    type filter hook forward priority 0; policy drop;
+  }
+
+  chain output {
+    type filter hook output priority 0; policy accept;
+  }
+}

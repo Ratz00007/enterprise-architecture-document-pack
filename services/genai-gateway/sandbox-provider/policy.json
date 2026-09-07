@@ -1,0 +1,26 @@
+{
+  "version": "1.0.0",
+  "description": "Data-classification allow-list for GenAI interactions (ADR-011). Environments not listed here deny all GenAI traffic.",
+  "allow": {
+    "dev": {
+      "interactions": ["triage-assessment", "test-failure-analysis", "package-design"],
+      "max_data_class": "INTERNAL",
+      "direct_identifiers": "DENIED"
+    },
+    "qa": {
+      "interactions": ["triage-assessment", "test-failure-analysis"],
+      "max_data_class": "MASKED",
+      "direct_identifiers": "DENIED"
+    },
+    "uat": {
+      "interactions": [],
+      "max_data_class": "NONE",
+      "direct_identifiers": "DENIED"
+    },
+    "prod": {
+      "interactions": [],
+      "max_data_class": "METADATA_ONLY",
+      "direct_identifiers": "DENIED"
+    }
+  }
+}

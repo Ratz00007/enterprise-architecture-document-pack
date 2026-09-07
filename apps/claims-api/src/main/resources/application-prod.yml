@@ -1,0 +1,39 @@
+# Production profile. No secret defaults: every ${VAR} without a fallback is
+# a required environment variable — the application fails fast if the
+# platform team has not provisioned it (values come from Ansible Vault, see
+# infra/ and AGENTS.md).
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT:5432}/${DB_NAME}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI}
+          jwk-set-uri: ${KEYCLOAK_JWK_SET_URI}
+
+genai:
+  gateway:
+    url: ${GENAI_GATEWAY_URL}
+    api-key: ${GENAI_API_KEY}
+
+otel:
+  exporter:
+    otlp:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: never
+
+logging:
+  level:
+    root: WARN
+    com.acme.claims: INFO

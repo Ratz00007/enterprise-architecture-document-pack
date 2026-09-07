@@ -1,0 +1,114 @@
+name: acme-claims
+
+# Local/dev stack: one origin (nginx :8081) serving the web UI, the API,
+# Keycloak and the GenAI gateway, so OIDC issuer and cookies stay consistent.
+# Bare-metal promotion targets (Dev/QA/UAT/Prod) use the Ansible playbooks in
+# infra/ and ci/Jenkinsfile; this file is for local development and testing.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: acme_user
+      POSTGRES_PASSWORD: acme_password
+      POSTGRES_DB: acme_claims
+    ports: ["5432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./data/schemas:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U acme_user -d acme_claims"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin-dev-only
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+    volumes:
+      - ./services/auth-realm/acme-claims-realm.json:/opt/keycloak/data/import/acme-claims-realm.json:ro
+    ports: ["8180:8080"]
+    depends_on: []
+
+  sandbox-provider:
+    build: ./services/genai-gateway/sandbox-provider
+    environment:
+      POLICY_PATH: /app/policy.json
+    expose: ["9100"]
+
+  genai-gateway:
+    image: ghcr.io/berriai/litellm:main-stable
+    command: ["--config", "/app/litellm.config.yaml", "--port", "4000"]
+    environment:
+      GENAI_UPSTREAM_BASE_URL: http://sandbox-provider:9100/v1
+      GENAI_MASTER_KEY: sk-dev-master-key-not-for-prod
+    volumes:
+      - ./services/genai-gateway/litellm.config.yaml:/app/litellm.config.yaml:ro
+    ports: ["9000:4000"]
+    depends_on: [sandbox-provider]
+
+  claims-api:
+    build: ./apps/claims-api
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: acme_claims
+      DB_USER: acme_user
+      DB_PASSWORD: acme_password
+      # Tokens are issued via the browser-facing origin; the JWK set is
+      # fetched inside the compose network.
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/acme-claims/protocol/openid-connect/certs
+      KEYCLOAK_ISSUER_URI: http://localhost:8081/realms/acme-claims
+      GENAI_GATEWAY_URL: http://genai-gateway:4000
+      SPRING_PROFILES_ACTIVE: compose
+    ports: ["8080:8080"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  claims-web:
+    build: ./apps/claims-web
+    ports: ["8081:80"]
+    depends_on: [claims-api, keycloak]
+
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    volumes:
+      - ./infra/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports: ["9090:9090"]
+
+  loki:
+    image: grafana/loki:3.1.0
+    command: ["-config.file=/etc/loki/loki-config.yml"]
+    volumes:
+      - ./infra/monitoring/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - lokidata:/loki
+    ports: ["3100:3100"]
+
+  promtail:
+    image: grafana/promtail:3.1.0
+    command: ["-config.file=/etc/promtail/promtail-config.yml"]
+    volumes:
+      - ./infra/monitoring/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on: [loki]
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin-dev-only
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./infra/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/monitoring/grafana/provisioning/dashboards:/var/lib/grafana/dashboards:ro
+    ports: ["3000:3000"]
+
+volumes:
+  pgdata:
+  lokidata:

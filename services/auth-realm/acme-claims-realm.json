@@ -1,0 +1,74 @@
+{
+  "realm": "acme-claims",
+  "displayName": "Acme Claims",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "resetPasswordAllowed": true,
+  "accessTokenLifespan": 900,
+  "ssoSessionIdleTimeout": 3600,
+  "roles": {
+    "realm": [
+      { "name": "claims-adjuster", "description": "Handles FNOL intake and triage" },
+      { "name": "claims-approver", "description": "Adjudicates claims; human approval per ADR-006" },
+      { "name": "claims-admin", "description": "Platform administration" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "claims-api",
+      "name": "Claims API (resource server)",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "protocol": "openid-connect",
+      "defaultClientScopes": ["profile", "roles"],
+      "protocolMappers": [
+        {
+          "name": "audience-claims-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": { "included.client.audience": "claims-api", "access.token.claim": "true" }
+        }
+      ]
+    },
+    {
+      "clientId": "claims-web",
+      "name": "Claims Web UI",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "protocol": "openid-connect",
+      "redirectUris": [
+        "http://localhost:5173/*",
+        "http://localhost:8081/*"
+      ],
+      "webOrigins": ["http://localhost:5173", "http://localhost:8081"],
+      "defaultClientScopes": ["profile", "roles", "email"]
+    }
+  ],
+  "users": [
+    {
+      "username": "adjuster1",
+      "enabled": true,
+      "email": "adjuster1@acme.internal",
+      "firstName": "Ada",
+      "lastName": "Adjuster",
+      "realmRoles": ["claims-adjuster"],
+      "credentials": [ { "type": "password", "value": "adjuster-dev-only", "temporary": false } ]
+    },
+    {
+      "username": "approver1",
+      "enabled": true,
+      "email": "approver1@acme.internal",
+      "firstName": "Abe",
+      "lastName": "Approver",
+      "realmRoles": ["claims-adjuster", "claims-approver"],
+      "credentials": [ { "type": "password", "value": "approver-dev-only", "temporary": false } ]
+    }
+  ]
+}
