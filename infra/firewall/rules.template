@@ -1,0 +1,66 @@
+# nftables rules — single source of truth.
+# This file is the template. Per-environment files are rendered
+# from it by the `common` Ansible role.
+#
+# Format: one rule per line, machine-parseable.
+#   <allow|deny>  <src-subnet>  ->  <dst-subnet>  : <port>  # <purpose>
+#
+# Editing rules:
+# 1. Edit this file in a PR.
+# 2. CI verifies the diff doesn't introduce a rule that is more
+#    permissive than the per-environment baseline.
+# 3. Ansible re-renders the environment files and the next
+#    `site.yml` run applies them.
+#
+# The pack's traffic matrix is the source of truth. See
+# `docs/architecture/network-topology.md`.
+
+# ---- inter-environment ----------------------------------------------------
+# Dev → QA — package promotion only
+allow  10.50.10.0/24  ->  10.50.20.0/24  :  22    # SSH for Jenkins deploy
+allow  10.50.10.0/24  ->  10.50.20.0/24  :  8080  # health probe
+
+# QA → UAT — package promotion only
+allow  10.50.20.0/24  ->  10.50.30.0/24  :  22    # SSH for Jenkins deploy
+allow  10.50.20.0/24  ->  10.50.30.0/24  :  8080  # health probe
+
+# UAT → Prod — controlled release promotion
+allow  10.50.30.0/24  ->  10.50.40.0/24  :  22    # SSH for Jenkins deploy
+allow  10.50.30.0/24  ->  10.50.40.0/24  :  8080  # health probe
+
+# ---- application → database -----------------------------------------------
+allow  10.50.20.0/24  ->  10.50.20.21    :  5432  # qa-app → qa-db (postgres)
+allow  10.50.30.0/24  ->  10.50.30.21    :  5432  # uat-app → uat-db
+allow  10.50.40.0/24  ->  10.50.40.21    :  5432  # prod-app → prod-db
+
+# ---- db-sync pipeline ----------------------------------------------------
+# Jenkins runs the db-sync job. Allowed to read from prod and write to qa+uat.
+allow  10.50.60.0/24  ->  10.50.40.21    :  5432  # Jenkins → prod-db (read-only)
+allow  10.50.60.0/24  ->  10.50.20.21    :  5432  # Jenkins → qa-db  (write)
+allow  10.50.60.0/24  ->  10.50.30.21    :  5432  # Jenkins → uat-db (write)
+
+# ---- GenAI gateway --------------------------------------------------------
+# Only the GenAI gateway has outbound internet (to the LLM provider).
+# It is the only host allowed to receive GenAI requests from
+# application hosts, and only on its allow-listed endpoints.
+allow  10.50.10.0/24  ->  10.50.50.11    :  8443  # dev → genai
+allow  10.50.20.0/24  ->  10.50.50.11    :  8443  # qa → genai
+allow  10.50.30.0/24  ->  10.50.50.11    :  8443  # uat → genai
+allow  10.50.40.0/24  ->  10.50.50.11    :  8443  # prod → genai (allow-listed only)
+
+# ---- observability --------------------------------------------------------
+# Prometheus + Loki scrape every host.
+allow  10.50.70.0/24  ->  10.50.0.0/16   :  9100  # node_exporter
+allow  10.50.70.0/24  ->  10.50.0.0/16   :  9187  # postgres_exporter
+allow  10.50.70.0/24  ->  10.50.0.0/16   :  8080  # /actuator/prometheus
+allow  10.50.70.0/24  ->  10.50.0.0/16   :  5140  # Promtail → Loki (syslog-tcp)
+
+# ---- UAT / customer ingress (public-facing) -------------------------------
+# UAT users reach the app via HAProxy in the UAT edge.
+allow  any            ->  10.50.30.10    :  443   # UAT HAProxy
+
+# Customers (internet) reach the prod HAProxy only.
+allow  any            ->  10.50.40.10    :  443   # Prod HAProxy
+
+# ---- everything else ------------------------------------------------------
+deny   any            ->  any            :  any   # default-deny

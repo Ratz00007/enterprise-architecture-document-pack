@@ -1,0 +1,13 @@
+# chrony config for the monitoring host. Same template as the
+# common role, with allow-list adjusted for the monitoring VLAN.
+
+{% for server in ntp_pool_servers | default(['ntp.internal.acme']) %}
+pool {{ server }} iburst maxsources 4
+{% endfor %}
+
+driftfile /var/lib/chrony/drift
+allow 10.50.70.0/24
+makestep 1.0 3
+rtcsync
+logdir /var/log/chrony
+log tracking measurements statistics

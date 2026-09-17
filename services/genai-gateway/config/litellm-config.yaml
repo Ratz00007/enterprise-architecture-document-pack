@@ -1,0 +1,41 @@
+# LiteLLM gateway config. See ADR-004, ADR-005, ADR-011.
+# The provider(s) below are placeholders. The first version of this
+# config uses a single provider for simplicity; multi-provider
+# routing is enabled by adding more entries.
+
+model_list:
+  - model_name: gpt-4o
+    litellm_params:
+      model: openai/gpt-4o
+      api_key: os.environ/OPENAI_API_KEY
+
+  - model_name: claude-sonnet-4
+    litellm_params:
+      model: anthropic/claude-sonnet-4-20250514
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  - model_name: llama-3-onprem
+    litellm_params:
+      model: openai/<INTERNAL_LLM_URL>
+      api_key: os.environ/INTERNAL_LLM_KEY
+      api_base: os.environ/INTERNAL_LLM_URL
+
+router_settings:
+  num_retries: 2
+  timeout: 30
+  redis_host: null  # not used in MVP
+  enable_pre_call_checks: true
+
+litellm_settings:
+  drop_params: true
+  set_verbose: false
+  telemetry: false
+
+# Per-environment data-class policy is in policies/data-class.yaml.
+# It is applied by the gateway's pre-call hook, not by LiteLLM
+# itself, because the policy needs to look at the request body
+# before the request is dispatched to a model.
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/AUDIT_DB_URL  # for request/response audit

@@ -1,0 +1,14 @@
+# UAT profile. Mirrors prod-uat behaviour with extra debug.
+
+spring:
+  jpa:
+    show-sql: false
+
+logging:
+  level:
+    com.acme.claims: DEBUG
+
+management:
+  endpoint:
+    health:
+      show-details: always

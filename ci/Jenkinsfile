@@ -1,0 +1,47 @@
+// Jenkinsfile — Acme Claims — root pipeline.
+// This file is intentionally tiny. All real logic lives in the
+// shared library at ci/jenkins/shared-library, so individual
+// Jenkinsfiles in apps/ and services/ just `library 'acme-claims'`
+// and call the steps.
+
+@Library('acme-claims@main') _
+
+acmePipeline {
+    name            = 'claims-api'
+    language        = 'java'
+    jdk             = '21'
+    buildTool       = 'maven'
+    artifactName    = 'claims-api'
+    containerImage  = 'registry.internal.acme/claims-api'
+    signatureMethod = 'cosign-keyless'
+    unitGate        = [
+        lineCoverage   : 80,
+        branchCoverage : 70,
+    ]
+    integrationGate = [
+        enabled        : true,
+        testcontainers : ['postgres:16', 'keycloak:25', 'minio:latest'],
+    ]
+    contractGate    = [
+        enabled        : true,
+        provider       : true,
+        consumerDriven : true,
+    ]
+    saGate          = [
+        enabled        : true,
+        tools          : ['spotbugs', 'checkstyle', 'pmd', 'owasp-dependency-check'],
+    ]
+    dastGate        = [
+        enabled        : true,
+        tool           : 'owasp-zap-baseline',
+        env            : 'qa',
+    ]
+    promotionChain  = ['qa', 'uat', 'prod']
+    approvalRoles   = [
+        qa  : 'qa_lead',
+        uat : 'uat_lead',
+        prod: 'release_operator',
+    ]
+    rollbackSupported = true
+    genaiAdvisory     = true
+}

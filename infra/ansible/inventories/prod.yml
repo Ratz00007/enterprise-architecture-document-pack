@@ -1,0 +1,49 @@
+---
+# Production environment inventory.
+# Most restricted. The only inbound from outside the data center
+# is via uat-haproxy-01's prod analogue (prod-haproxy-01).
+
+all:
+  vars:
+    env: prod
+    timezone: UTC
+    ntp_server: ntp.internal.acme
+    log_retention_hours: 24
+    monitoring_scrape_port: 9100
+
+  children:
+    edge:
+      hosts:
+        prod-haproxy-01:
+          ansible_host: 10.50.40.10
+          role: haproxy
+    app:
+      hosts:
+        prod-app-01:
+          ansible_host: 10.50.40.11
+          role: claims_api
+    db:
+      hosts:
+        prod-db-01:
+          ansible_host: 10.50.40.21
+          role: postgres
+        prod-db-bkp-01:
+          ansible_host: 10.50.40.22
+          role: postgres_backup
+    genai:
+      hosts:
+        genai-01:
+          ansible_host: 10.50.50.11
+          role: genai_gateway
+    observability_targets:
+      hosts:
+        prod-haproxy-01:
+          ansible_host: 10.50.40.10
+        prod-app-01:
+          ansible_host: 10.50.40.11
+        prod-db-01:
+          ansible_host: 10.50.40.21
+        prod-db-bkp-01:
+          ansible_host: 10.50.40.22
+        genai-01:
+          ansible_host: 10.50.50.11

@@ -1,0 +1,24 @@
+#!/usr/sbin/nft -f
+# Managed by Ansible. Per-environment overlay.
+# The base is in /etc/nftables.d/00-base.nft; this is the
+# environment-specific allow-list.
+
+table inet filter {
+
+    chain env-input {
+        # ICMP (echo + unreachable) — needed for monitoring
+        ip protocol icmp icmp type { echo-request, destination-unreachable } accept
+        ip6 nexthdr ipv6-icmp icmpv6 type { echo-request, destination-unreachable } accept
+
+        # SSH — admin bastion only
+        ip saddr 10.50.80.0/24 tcp dport 22 accept comment "admin bastion"
+
+        # Environment-specific allow-list
+        {% for rule in firewall_rules %}
+        {{ rule }}  # rendered from infra/firewall/rules.template
+        {% endfor %}
+
+        # Log and drop anything that didn't match
+        log prefix "env-drop: " flags all counter drop
+    }
+}

@@ -1,0 +1,22 @@
+# Managed by Ansible. Local changes will be overwritten.
+# Internal NTP source; one stratum above the public pool.
+{% for server in ntp_pool_servers | default(['ntp.internal.acme']) %}
+pool {{ server }} iburst maxsources 4
+{% endfor %}
+
+# Drift file
+driftfile /var/lib/chrony/drift
+
+# Allow the local network to query us
+allow 10.50.0.0/16
+
+# Serve time even if not synchronized, to not break clients
+local stratum 10
+
+# Log tracking
+logdir /var/log/chrony
+log tracking measurements statistics
+
+# Stratum requirement for our SRE alerts
+makestep 1.0 3
+rtcsync

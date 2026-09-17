@@ -1,0 +1,27 @@
+# syntax=docker/dockerfile:1.7
+# Multi-stage build for the claims-api.
+# Final image is a distroless Java 21 runtime — no shell, no
+# package manager, no busybox.
+
+# ---- build stage ---------------------------------------------------------
+FROM eclipse-temurin:21-jdk-jammy AS build
+WORKDIR /workspace
+
+# Cache dependencies separately
+COPY pom.xml mvnw ./
+COPY .mvn .mvn
+RUN ./mvnw -B -q dependency:go-offline
+
+# Build
+COPY src src
+RUN ./mvnw -B -q -DskipTests package
+
+# ---- runtime stage -------------------------------------------------------
+FROM gcr.io/distroless/java21-debian12:nonroot
+WORKDIR /app
+COPY --from=build /workspace/target/claims-api-*.jar /app/app.jar
+
+USER nonroot:nonroot
+EXPOSE 8080
+ENV JAVA_TOOL_OPTIONS="-XX:+ExitOnOutOfMemoryError -XX:MaxRAMPercentage=75.0"
+ENTRYPOINT ["java","-jar","/app/app.jar"]

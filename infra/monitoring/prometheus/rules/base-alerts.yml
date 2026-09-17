@@ -1,0 +1,135 @@
+# Base alert rules. See docs/architecture/observability-design.md
+# for the rationale and the threshold sources.
+groups:
+
+  - name: infra
+    interval: 30s
+    rules:
+      - alert: HostDown
+        expr: up{job="node"} == 0
+        for: 1m
+        labels:
+          severity: sev2
+        annotations:
+          summary: "Host {{ $labels.instance }} is down"
+          description: "node_exporter has been unreachable for 1 minute."
+          runbook: "https://runbooks.internal/HostDown"
+
+      - alert: DiskPressure
+        expr: |
+          (node_filesystem_avail_bytes{mountpoint="/"}
+            / node_filesystem_size_bytes{mountpoint="/"}) < 0.20
+        for: 15m
+        labels:
+          severity: sev2
+        annotations:
+          summary: "Disk > 80% on {{ $labels.instance }}"
+          runbook: "https://runbooks.internal/DiskPressure"
+
+      - alert: DiskPressureCritical
+        expr: |
+          (node_filesystem_avail_bytes{mountpoint="/"}
+            / node_filesystem_size_bytes{mountpoint="/"}) < 0.10
+        for: 5m
+        labels:
+          severity: sev1
+        annotations:
+          summary: "Disk > 90% on {{ $labels.instance }}"
+          runbook: "https://runbooks.internal/DiskPressure"
+
+  - name: database
+    interval: 30s
+    rules:
+      - alert: DbDown
+        expr: pg_up == 0
+        for: 30s
+        labels:
+          severity: sev1
+        annotations:
+          summary: "Postgres down on {{ $labels.instance }}"
+          runbook: "https://runbooks.internal/DbDown"
+
+      - alert: DbConnectionsNearLimit
+        expr: |
+          (pg_stat_activity_count
+            / pg_settings_max_connections) > 0.85
+        for: 10m
+        labels:
+          severity: sev3
+        annotations:
+          summary: "Postgres {{ $labels.instance }} > 85% of max connections"
+
+  - name: application
+    interval: 30s
+    rules:
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m]))
+            /
+          sum(rate(http_server_requests_seconds_count[5m])) > 0.01
+        for: 5m
+        labels:
+          severity: sev2
+        annotations:
+          summary: "5xx rate > 1% on {{ $labels.service }} ({{ $labels.env }})"
+
+      - alert: LatencyP95Breach
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_server_requests_seconds_bucket[5m])) by (le, service, env)
+          ) > 1.0
+        for: 15m
+        labels:
+          severity: sev3
+        annotations:
+          summary: "p95 > 1s on {{ $labels.service }} ({{ $labels.env }})"
+
+  - name: log_rotation
+    interval: 5m
+    rules:
+      - alert: LogRotationStuck
+        expr: time() - max(loki_chunk_age_end_seconds) > 25 * 3600
+        for: 30m
+        labels:
+          severity: sev2
+        annotations:
+          summary: "Log rotation has not completed in 25h"
+          runbook: "https://runbooks.internal/LogRotationStuck"
+
+  - name: pipeline
+    interval: 1m
+    rules:
+      - alert: PromotionStalled
+        expr: time() - jenkins_pipeline_last_promotion_timestamp_seconds > 4 * 3600
+        for: 30m
+        labels:
+          severity: sev3
+        annotations:
+          summary: "Promotion waiting for approval > 4h"
+
+  - name: genai
+    interval: 30s
+    rules:
+      - alert: GenAIGatewayDegraded
+        expr: |
+          sum(rate(litellm_provider_5xx_total[10m]))
+            /
+          sum(rate(litellm_provider_requests_total[10m])) > 0.10
+        for: 10m
+        labels:
+          severity: sev3
+        annotations:
+          summary: "GenAI provider 5xx > 10%"
+          runbook: "https://runbooks.internal/GenAIDegraded"
+
+  - name: certificates
+    interval: 1h
+    rules:
+      - alert: CertExpiringSoon
+        expr: (probe_ssl_earliest_cert_expiry - time()) < 14 * 86400
+        for: 1h
+        labels:
+          severity: sev3
+        annotations:
+          summary: "TLS cert on {{ $labels.instance }} expires in < 14 days"
+          runbook: "https://runbooks.internal/CertRenewal"

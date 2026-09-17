@@ -1,0 +1,63 @@
+# Alertmanager configuration. See docs/architecture/observability-design.md.
+
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: 'default'
+  group_by: [alertname, env, service]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    - matchers: [severity="sev1"]
+      receiver: pager-oncall
+      group_wait: 10s
+      repeat_interval: 30m
+      continue: true
+    - matchers: [severity="sev2"]
+      receiver: slack-oncall
+      group_wait: 1m
+      repeat_interval: 2h
+      continue: true
+    - matchers: [severity="sev3"]
+      receiver: slack-oncall
+      group_wait: 5m
+      repeat_interval: 8h
+      continue: true
+    # Copy every firing alert to the GenAI gateway for advisory RCA.
+    - match_re: .*
+      receiver: genai-rca
+      continue: true
+
+receivers:
+  - name: 'default'
+    webhook_configs:
+      - url: http://127.0.0.1:5001/default
+
+  - name: 'pager-oncall'
+    pagerduty_configs:
+      - service_key: '<PAGERDUTY_KEY_FILE>'
+        send_resolved: true
+    slack_configs:
+      - api_url: '<SLACK_WEBHOOK_FILE>'
+        channel: '#oncall-sev1'
+        send_resolved: true
+
+  - name: 'slack-oncall'
+    slack_configs:
+      - api_url: '<SLACK_WEBHOOK_FILE>'
+        channel: '#oncall'
+        send_resolved: true
+
+  - name: 'genai-rca'
+    webhook_configs:
+      - url: 'https://genai-01:8443/advisory/rca'
+        tls_config:
+          ca_file: /etc/ssl/internal-ca.pem
+        send_resolved: false
+
+inhibit_rules:
+  - source_matchers: [severity="sev1"]
+    target_matchers: [severity="sev2"]
+    equal: [alertname, env]

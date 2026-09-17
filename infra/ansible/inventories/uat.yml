@@ -1,0 +1,44 @@
+---
+# UAT environment inventory.
+# Holds a sanitized image of prod (`ADR-008`).
+# UAT users reach the app via the HAProxy in front of uat-app-01.
+
+all:
+  vars:
+    env: uat
+    timezone: UTC
+    ntp_server: ntp.internal.acme
+    log_retention_hours: 24
+    monitoring_scrape_port: 9100
+
+  children:
+    edge:
+      hosts:
+        uat-haproxy-01:
+          ansible_host: 10.50.30.10
+          role: haproxy
+    app:
+      hosts:
+        uat-app-01:
+          ansible_host: 10.50.30.11
+          role: claims_api
+    db:
+      hosts:
+        uat-db-01:
+          ansible_host: 10.50.30.21
+          role: postgres
+    genai:
+      hosts:
+        genai-01:
+          ansible_host: 10.50.50.11
+          role: genai_gateway
+    observability_targets:
+      hosts:
+        uat-haproxy-01:
+          ansible_host: 10.50.30.10
+        uat-app-01:
+          ansible_host: 10.50.30.11
+        uat-db-01:
+          ansible_host: 10.50.30.21
+        genai-01:
+          ansible_host: 10.50.50.11

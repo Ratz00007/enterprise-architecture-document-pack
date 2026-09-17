@@ -1,0 +1,19 @@
+# Per-environment overrides.
+# Loaded by Spring when the profile is activated.
+# See ADR-000 for the rationale and ADR-007 for the data model.
+
+spring:
+  jpa:
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+
+logging:
+  level:
+    com.acme.claims: DEBUG
+
+management:
+  endpoint:
+    health:
+      show-details: always

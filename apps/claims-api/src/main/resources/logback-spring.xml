@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Structured JSON logging. Output is one JSON object per line on
+  stdout, with the OpenTelemetry resource attributes attached.
+  PII fields are masked by the logback filter before they reach
+  the encoder.
+-->
+<configuration scan="false">
+
+    <springProperty scope="context" name="appName"
+        source="spring.application.name" defaultValue="claims-api"/>
+    <springProperty scope="context" name="env"
+        source="spring.profiles.active" defaultValue="local"/>
+
+    <appender name="STDOUT_JSON" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <includeMdcKeyName>trace_id</includeMdcKeyName>
+            <includeMdcKeyName>span_id</includeMdcKeyName>
+            <customFields>{"service":"${appName}","env":"${env}"}</customFields>
+            <fieldNames>
+                <timestamp>ts</timestamp>
+                <message>msg</message>
+                <logger>logger</logger>
+                <thread>thread</thread>
+                <level>level</level>
+            </fieldNames>
+            <timeZone>UTC</timeZone>
+        </encoder>
+    </appender>
+
+    <!--
+      Mask PII at the encoder level. Any message that mentions a
+      field on the deny-list is rewritten to "[REDACTED]".
+    -->
+    <conversionRule conversionWord="masked"
+        converterClass="com.acme.claims.observability.PiiMaskingConverter"/>
+
+    <root level="INFO">
+        <appender-ref ref="STDOUT_JSON"/>
+    </root>
+
+    <logger name="com.acme.claims" level="INFO"/>
+    <logger name="org.springframework.security" level="INFO"/>
+    <logger name="org.hibernate.SQL" level="WARN"/>
+</configuration>

@@ -1,0 +1,51 @@
+/* Global styles. Minimal — most styling lives in component-scoped
+   CSS modules in src/components. */
+
+:root {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  color-scheme: light dark;
+  --color-fg: #111;
+  --color-bg: #fff;
+  --color-accent: #0a3d62;
+  --color-border: #d0d7de;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-fg: #e6edf3;
+    --color-bg: #0d1117;
+    --color-accent: #58a6ff;
+    --color-border: #30363d;
+  }
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--color-bg);
+  color: var(--color-fg);
+}
+
+main {
+  max-width: 64rem;
+  margin: 2rem auto;
+  padding: 0 1rem;
+}
+
+h1 {
+  font-size: 1.5rem;
+  margin: 0 0 1rem;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th, td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+}

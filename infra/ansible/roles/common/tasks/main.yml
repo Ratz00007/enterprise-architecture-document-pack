@@ -1,0 +1,76 @@
+---
+# Common baseline applied to every host.
+# Idempotent.
+
+- name: Set timezone to UTC
+  community.general.timezone:
+    name: UTC
+
+- name: Install base packages
+  ansible.builtin.package:
+    name:
+      - chrony
+      - ca-certificates
+      - rsync
+      - vim
+      - curl
+      - jq
+      - logrotate
+      - rsyslog
+    state: present
+
+- name: Configure chrony against the internal NTP server
+  ansible.builtin.template:
+    src: chrony.conf.j2
+    dest: /etc/chrony.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart chrony
+
+- name: Ensure chrony is running and enabled
+  ansible.builtin.systemd:
+    name: chronyd
+    enabled: true
+    state: started
+
+- name: Apply logrotate policy
+  ansible.builtin.copy:
+    src: logrotate.conf
+    dest: /etc/logrotate.d/acme
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Apply nftables base rules
+  ansible.builtin.copy:
+    src: "{{ role_path }}/files/nftables-base.nft"
+    dest: /etc/nftables.d/00-base.nft
+    owner: root
+    group: root
+    mode: "0640"
+  notify: reload nftables
+
+- name: Apply nftables environment rules
+  ansible.builtin.template:
+    src: nftables-env.nft.j2
+    dest: /etc/nftables.d/10-env.nft
+    owner: root
+    group: root
+    mode: "0640"
+  notify: reload nftables
+
+- name: Enable nftables
+  ansible.builtin.systemd:
+    name: nftables
+    enabled: true
+    state: started
+
+  handlers:
+    - name: restart chrony
+      ansible.builtin.systemd:
+        name: chronyd
+        state: restarted
+
+    - name: reload nftables
+      ansible.builtin.command: nft -f /etc/nftables.conf

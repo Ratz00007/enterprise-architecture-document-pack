@@ -1,0 +1,63 @@
+# Prometheus configuration. Managed in version control.
+# Scrape config + alert rules + alertmanager targets.
+
+global:
+  scrape_interval:     15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: acme-claims
+    monitor: mon-01
+
+rule_files:
+  - "rules/*.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["127.0.0.1:9093"]
+
+scrape_configs:
+
+  # Prometheus self-scrape
+  - job_name: prometheus
+    static_configs:
+      - targets: ["127.0.0.1:9090"]
+
+  # Node-level metrics from every host
+  - job_name: node
+    file_sd_configs:
+      - files: ["targets/node-*.yml"]
+        refresh_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+
+  # Postgres exporter
+  - job_name: postgres
+    file_sd_configs:
+      - files: ["targets/postgres-*.yml"]
+        refresh_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+
+  # The Spring Boot app's /actuator/prometheus
+  - job_name: claims-api
+    metrics_path: /actuator/prometheus
+    scheme: http
+    file_sd_configs:
+      - files: ["targets/claims-api-*.yml"]
+        refresh_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+
+  # HAProxy
+  - job_name: haproxy
+    static_configs:
+      - targets: ["10.50.30.10:8404", "10.50.40.10:8404"]
+
+  # GenAI gateway (LiteLLM exposes its own /metrics)
+  - job_name: genai
+    static_configs:
+      - targets: ["10.50.50.11:4000"]

@@ -1,0 +1,48 @@
+---
+# Top-level playbook. Run with:
+#   ansible-playbook -i inventories/<env>.yml site.yml --limit <env>
+#
+# This playbook applies every role to every host in the targeted
+# environment. Roles are idempotent.
+
+- name: Apply common baseline
+  hosts: all
+  roles:
+    - common
+  tags: [common, always]
+
+- name: Configure app servers
+  hosts: app
+  roles:
+    - claims_api
+  tags: [app, claims_api]
+
+- name: Configure Postgres hosts
+  hosts: db
+  roles:
+    - postgres
+  tags: [db, postgres]
+
+- name: Configure backup target
+  hosts: prod_db_bkp_01
+  roles:
+    - postgres_backup
+  tags: [db, backup]
+
+- name: Configure HAProxy edge
+  hosts: edge
+  roles:
+    - haproxy
+  tags: [edge, haproxy]
+
+- name: Configure GenAI gateway
+  hosts: genai
+  roles:
+    - genai_gateway
+  tags: [genai]
+
+- name: Configure observability agents on every host
+  hosts: all
+  roles:
+    - monitoring
+  tags: [monitoring, always]

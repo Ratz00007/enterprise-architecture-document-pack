@@ -1,0 +1,58 @@
+{
+  "name": "@acme/claims-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Acme Claims adjuster and customer UI — React 18 + TypeScript + Vite.",
+  "engines": {
+    "node": ">=20.10.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.12.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --check .",
+    "format:fix": "prettier --write .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed"
+  },
+  "dependencies": {
+    "@radix-ui/react-dialog": "1.1.2",
+    "@radix-ui/react-dropdown-menu": "2.1.2",
+    "@radix-ui/react-tabs": "1.1.1",
+    "@radix-ui/react-toast": "1.2.2",
+    "@tanstack/react-query": "5.59.0",
+    "@tanstack/react-router": "1.78.0",
+    "clsx": "2.1.1",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "zod": "3.23.8"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.48.0",
+    "@testing-library/jest-dom": "6.6.2",
+    "@testing-library/react": "16.0.1",
+    "@types/node": "22.7.5",
+    "@types/react": "18.3.11",
+    "@types/react-dom": "18.3.0",
+    "@typescript-eslint/eslint-plugin": "8.8.1",
+    "@typescript-eslint/parser": "8.8.1",
+    "@vitejs/plugin-react": "4.3.2",
+    "eslint": "9.12.0",
+    "eslint-plugin-react": "7.37.1",
+    "eslint-plugin-react-hooks": "5.0.0",
+    "eslint-plugin-react-refresh": "0.4.12",
+    "jsdom": "25.0.1",
+    "prettier": "3.3.3",
+    "typescript": "5.6.3",
+    "vite": "5.4.8",
+    "vitest": "2.1.2"
+  }
+}

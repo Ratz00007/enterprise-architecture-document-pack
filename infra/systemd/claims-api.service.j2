@@ -1,0 +1,63 @@
+# Managed by Ansible. Do not edit.
+# claims-api.service — the Spring Boot application.
+
+[Unit]
+Description=Acme Claims API
+Documentation=https://wiki.internal/acme-claims
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+NotifyAccess=main
+User={{ app_user }}
+Group={{ app_user }}
+WorkingDirectory={{ app_install_dir }}
+
+EnvironmentFile=/etc/claims-api/claims-api.env
+ExecStart=/usr/bin/podman run \
+  --rm \
+  --name claims-api \
+  --pid=host \
+  --network=host \
+  --read-only \
+  --tmpfs=/tmp:rw,size=512m \
+  --tmpfs=/run:rw,size=64m \
+  --volume /etc/claims-api:/etc/claims-api:ro \
+  --volume /var/log/claims-api:/var/log/claims-api:rw \
+  --log-driver=k8s-file \
+  --log-opt path=/var/log/claims-api/claims-api.log \
+  --health-cmd="curl -fsS http://127.0.0.1:8080/actuator/health" \
+  --health-interval=30s \
+  --health-timeout=5s \
+  --health-retries=3 \
+  registry.internal.acme/claims-api@{{ app_digest }}
+
+ExecStop=/usr/bin/podman stop --ignore --time 30 claims-api
+ExecStopPost=-/usr/bin/podman rm -f claims-api
+
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=45
+
+# Hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+SystemCallArchitectures=native
+
+# Resource limits
+MemoryMax=2G
+CPUQuota=200%
+
+[Install]
+WantedBy=multi-user.target

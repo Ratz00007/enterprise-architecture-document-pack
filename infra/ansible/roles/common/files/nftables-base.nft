@@ -1,0 +1,40 @@
+#!/usr/sbin/nft -f
+# Managed by Ansible. Do not edit.
+# Base nftables rules. The environment-specific overlay lives in
+# 10-env.nft and is rendered from infra/firewall/rules.template.
+
+table inet filter {
+    chain input {
+        type filter hook input priority 0; policy drop;
+
+        # Loopback
+        iif "lo" accept comment "loopback"
+
+        # Established / related
+        ct state established,related accept comment "established/related"
+
+        # Invalid
+        ct state invalid drop comment "drop invalid"
+
+        # ICMP (rate-limited)
+        ip protocol icmp limit rate 4/second accept comment "icmp rate-limited"
+        ip6 nexthdr ipv6-icmp limit rate 4/second accept comment "icmp6 rate-limited"
+
+        # Jump to environment overlay
+        jump env-input
+
+        # Log + drop everything else
+        log prefix "nft-drop: " flags all counter drop
+    }
+
+    chain forward {
+        type filter hook forward priority 0; policy drop;
+        # no forwarding on these hosts
+    }
+
+    chain output {
+        type filter hook output priority 0; policy accept;
+        # Egress is default-deny at the edge; per-host egress
+        # controls live in 20-egress.nft (post-MVP).
+    }
+}

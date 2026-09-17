@@ -1,0 +1,65 @@
+---
+# Deploy a specific application version to an environment.
+# Used by the Jenkins pipeline after a human approval.
+# Run with:
+#   ansible-playbook -i inventories/<env>.yml promote.yml \
+#     -e "app_version=1.4.2 app_digest=sha256:9f1c…d7e2"
+
+- name: Promote an application artifact
+  hosts: app
+  become: true
+  vars:
+    app_name: claims-api
+    app_version: "1.0.0"
+    app_digest: ""
+    app_user: claims
+    app_install_dir: /opt/{{ app_name }}
+  tasks:
+    - name: Verify artifact digest
+      ansible.builtin.assert:
+        that:
+          - app_digest is match('^sha256:[a-f0-9]{64}$')
+        fail_msg: "app_digest must look like 'sha256:<64 hex chars>'."
+
+    - name: Pull the verified image
+      containers.podman.podman_image:
+        name: "registry.internal.acme/{{ app_name }}@{{ app_digest }}"
+        state: present
+        validate_certs: true
+
+    - name: Stop the previous instance
+      ansible.builtin.systemd:
+        name: "{{ app_name }}.service"
+        state: stopped
+      failed_when: false  # first deploy: no service yet
+
+    - name: Install systemd unit
+      ansible.builtin.template:
+        src: "../systemd/{{ app_name }}.service.j2"
+        dest: "/etc/systemd/system/{{ app_name }}.service"
+        owner: root
+        group: root
+        mode: "0644"
+      notify: reload systemd
+
+    - name: Enable and start service
+      ansible.builtin.systemd:
+        name: "{{ app_name }}.service"
+        enabled: true
+        state: started
+        daemon_reload: true
+
+    - name: Wait for /actuator/health
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:8080/actuator/health"
+        status_code: 200
+        timeout: 5
+      register: health
+      retries: 12
+      delay: 5
+      until: health.status == 200
+
+  handlers:
+    - name: reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true

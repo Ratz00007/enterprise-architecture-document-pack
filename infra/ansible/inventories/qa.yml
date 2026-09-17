@@ -1,0 +1,36 @@
+---
+# QA environment inventory.
+# Has its own DB and can talk to the GenAI gateway (read-only).
+
+all:
+  vars:
+    env: qa
+    timezone: UTC
+    ntp_server: ntp.internal.acme
+    log_retention_hours: 24
+    monitoring_scrape_port: 9100
+
+  children:
+    app:
+      hosts:
+        qa-app-01:
+          ansible_host: 10.50.20.11
+          role: claims_api
+    db:
+      hosts:
+        qa-db-01:
+          ansible_host: 10.50.20.21
+          role: postgres
+    genai:
+      hosts:
+        genai-01:
+          ansible_host: 10.50.50.11
+          role: genai_gateway
+    observability_targets:
+      hosts:
+        qa-app-01:
+          ansible_host: 10.50.20.11
+        qa-db-01:
+          ansible_host: 10.50.20.21
+        genai-01:
+          ansible_host: 10.50.50.11

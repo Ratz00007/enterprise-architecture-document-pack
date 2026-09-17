@@ -1,0 +1,234 @@
+openapi: 3.1.0
+info:
+  title: Acme Claims API
+  version: 0.1.0-draft
+  description: |
+    Insurance claims processing — Spring Boot 3.3 on Java 21.
+    Implements the workflows in docs/domain/workflows.md and the
+    data model in docs/domain/entities.md. See AGENTS.md and the
+    ADRs in docs/architecture/adr/ for design rationale.
+  contact:
+    name: Acme Engineering
+    email: eng@internal.acme
+  license:
+    name: Internal use only
+    url: https://internal.acme/license
+
+servers:
+  - url: http://localhost:8080
+    description: Local dev
+  - url: https://{env}-app.internal.acme
+    description: Per-environment
+    variables:
+      env:
+        default: dev
+        enum: [dev, qa, uat, prod]
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Claims
+    description: Claim lifecycle (FNOL → payout)
+  - name: Documents
+    description: Document upload + classification
+  - name: Decisions
+    description: Adjudication outcomes
+  - name: Reserves
+    description: Financial reserves
+  - name: Payouts
+    description: Money out
+  - name: Reporting
+    description: Operational reports
+
+paths:
+  /api/v1/claims:
+    get:
+      tags: [Claims]
+      summary: List claims
+      parameters:
+        - in: query
+          name: state
+          schema: { $ref: '#/components/schemas/ClaimState' }
+        - in: query
+          name: assignedToMe
+          schema: { type: boolean }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Claim' }
+
+  /api/v1/claims/fnol:
+    post:
+      tags: [Claims]
+      summary: Submit a First Notice of Loss
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FnolRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Claim' }
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /api/v1/claims/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ClaimId'
+    get:
+      tags: [Claims]
+      summary: Get a claim by id
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Claim' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/claims/{id}/transitions:
+    parameters:
+      - $ref: '#/components/parameters/ClaimId'
+    post:
+      tags: [Claims]
+      summary: Transition a claim to a new state
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TransitionRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Claim' }
+        '409':
+          description: Illegal state transition
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    ClaimId:
+      in: path
+      name: id
+      required: true
+      schema: { type: string, format: uuid }
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    UnprocessableEntity:
+      description: Validation failed
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    ClaimState:
+      type: string
+      enum:
+        - NEW
+        - TRIAGE
+        - INVESTIGATING
+        - DECISION_PENDING
+        - APPROVED
+        - RESERVED
+        - PAYOUT_PENDING
+        - PAID
+        - DENIED
+        - WITHDRAWN
+        - CLOSED
+        - ARCHIVED
+        - REOPENED
+
+    Claim:
+      type: object
+      required:
+        - id
+        - claimNumber
+        - policyId
+        - claimantPartyId
+        - state
+        - lossDate
+        - reportedDate
+        - estimatedAmountCents
+        - currency
+        - description
+        - version
+      properties:
+        id:                   { type: string, format: uuid }
+        claimNumber:          { type: string }
+        policyId:             { type: string, format: uuid }
+        claimantPartyId:      { type: string, format: uuid }
+        state:                { $ref: '#/components/schemas/ClaimState' }
+        lossDate:             { type: string, format: date-time }
+        reportedDate:         { type: string, format: date-time }
+        severity:
+          type: string
+          enum: [low, medium, high, catastrophe]
+        estimatedAmountCents: { type: integer, format: int64 }
+        currency:             { type: string, minLength: 3, maxLength: 3 }
+        fraudScore:           { type: number, format: float, nullable: true }
+        description:          { type: string }
+        assignedAdjusterId:   { type: string, format: uuid, nullable: true }
+        version:              { type: integer, format: int64 }
+
+    FnolRequest:
+      type: object
+      required: [policyId, claimantPartyId, lossType, lossDate, description, estimatedAmountCents, currency]
+      properties:
+        policyId:             { type: string, format: uuid }
+        claimantPartyId:      { type: string, format: uuid }
+        lossType:
+          type: string
+          enum: [fire, water, theft, wind, liability, auto_collision, other]
+        lossDate:             { type: string, format: date-time }
+        description:          { type: string, minLength: 1, maxLength: 8000 }
+        estimatedAmountCents: { type: integer, format: int64, minimum: 0 }
+        currency:             { type: string, minLength: 3, maxLength: 3 }
+
+    TransitionRequest:
+      type: object
+      required: [toState, comment]
+      properties:
+        toState:  { $ref: '#/components/schemas/ClaimState' }
+        comment:  { type: string, minLength: 1, maxLength: 4000 }
+        evidenceItemId: { type: string, format: uuid, nullable: true }
+
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:    { type: string }
+        message: { type: string }
+        details: { type: object, additionalProperties: true }

@@ -1,0 +1,189 @@
+# Masking rules for the prod -> qa/uat sync. See ADR-008 and
+# services/db-sync/README.md. This file is the source of truth;
+# the db-sync job reads the version pinned in the deploy record.
+
+version: 1
+owner: data
+last_reviewed: 2026-08-25
+
+# Strategy:
+#   drop      — the column is removed from the masked dataset
+#   hash      — replaced with a stable HMAC-SHA256 of the original
+#   redact    — replaced with the string '[REDACTED]'
+#   tokenize  — replaced with a per-table-per-column deterministic token
+#   keep      — value preserved as-is
+#
+# Decision rules:
+#   - PII is never `keep`
+#   - If a column is on the GenAI deny-list (services/genai-gateway/...),
+#     it is at minimum `redact`
+#   - `tax_id_hash` is the ONE exception: the raw value is never stored;
+#     the column is already a hash, and we hash it again to break correlation
+
+tables:
+  parties:
+    id: keep                       # PK
+    kind: keep
+    display_name: tokenize          # synthetic name
+    email: tokenize                 # synthetic @example.com
+    phone: redact
+    address_id: drop                # full address replaced with region only
+    tax_id_hash: hash               # double-hash
+    metadata: redact
+    created_at: keep
+    updated_at: keep
+    created_by: hash
+    updated_by: hash
+    version: keep
+
+  addresses:
+    id: hash
+    line1: redact
+    line2: redact
+    city: keep
+    region: keep
+    postal_code: redact             # keep city + region, drop ZIP
+    country_code: keep
+    latitude: keep
+    longitude: keep
+    created_at: keep
+    updated_at: keep
+    created_by: hash
+    updated_by: hash
+    version: keep
+
+  policies:
+    id: keep                       # FK from claims; must remain valid
+    policy_number: hash             # correlation ID
+    product_line: keep
+    holder_party_id: keep           # FK; do not break
+    effective_date: keep
+    expiration_date: keep
+    status: keep
+    coverage_limits: keep
+    deductibles: keep
+    metadata: redact
+    created_at: keep
+    updated_at: keep
+    created_by: hash
+    updated_by: hash
+    version: keep
+
+  claims:
+    id: keep
+    claim_number: hash
+    policy_id: keep
+    claimant_party_id: keep
+    loss_type: keep
+    loss_date: keep
+    reported_date: keep
+    severity: keep
+    state: keep
+    assigned_adjuster_id: hash      # reassign in qa
+    description: redact             # free text — likely PII
+    estimated_amount_cents: keep
+    currency: keep
+    fraud_score: keep
+    metadata: redact
+    created_at: keep
+    updated_at: keep
+    created_by: hash
+    updated_by: hash
+    version: keep
+
+  claim_state_history:
+    id: keep
+    claim_id: keep
+    from_state: keep
+    to_state: keep
+    changed_by_user_id: hash
+    changed_at: keep
+    reason: redact                  # likely PII
+    evidence_ref: keep
+    genai_summary: redact
+
+  documents:
+    id: keep
+    claim_id: keep
+    kind: keep
+    original_filename: hash
+    mime_type: keep
+    byte_size: keep
+    sha256: keep
+    storage_uri: drop               # raw file is NEVER copied
+    uploaded_by_user_id: hash
+    uploaded_at: keep
+    pii_classification: keep
+    pii_redacted_uri: drop
+    created_at: keep
+    updated_at: keep
+    created_by: hash
+    updated_by: hash
+    version: keep
+
+  decisions:
+    id: keep
+    claim_id: keep
+    outcome: keep
+    approved_amount_cents: keep
+    denial_reason: redact
+    approved_by_user_id: hash
+    decided_at: keep
+    rationale: redact
+    genai_assisted: keep
+    genai_summary: redact
+    created_at: keep
+    updated_at: keep
+    version: keep
+
+  reserves:
+    id: keep
+    claim_id: keep
+    amount_cents: keep
+    currency: keep
+    set_by_user_id: hash
+    set_at: keep
+    reason: redact
+    superseded_by_id: keep
+    created_at: keep
+    version: keep
+
+  payouts:
+    id: keep
+    claim_id: keep
+    decision_id: keep
+    amount_cents: keep
+    currency: keep
+    payee_party_id: hash
+    method: keep
+    status: keep
+    instructed_at: keep
+    settled_at: keep
+    external_reference: drop
+    created_at: keep
+    updated_at: keep
+    version: keep
+
+  users:
+    id: hash
+    email: hash
+    display_name: hash
+    role: keep
+    active: keep
+    created_at: keep
+    updated_at: keep
+    version: keep
+
+  audit_log:
+    # Audit log is never copied. It is per-environment.
+    id: drop
+    occurred_at: drop
+    actor_subject: drop
+    actor_role: drop
+    action: drop
+    resource_type: drop
+    resource_id: drop
+    correlation_id: drop
+    payload: drop
+    prev_hash: drop
+    hash: drop

@@ -1,0 +1,105 @@
+spring:
+  application:
+    name: claims-api
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+
+  datasource:
+    url: ${CLAIMS_DB_URL:jdbc:postgresql://localhost:5432/claims}
+    username: ${CLAIMS_DB_USER:claims}
+    password: ${CLAIMS_DB_PASSWORD:change-me}
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 5000
+      validation-timeout: 3000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc.time_zone: UTC
+        format_sql: false
+    open-in-view: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER:http://keycloak:8080/realms/acme}
+          jwk-set-uri: ${KEYCLOAK_ISSUER:http://keycloak:8080/realms/acme}/protocol/openid-connect/certs
+
+server:
+  port: 8080
+  forward-headers-strategy: framework
+  error:
+    include-message: always
+    include-stacktrace: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when_authorized
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      percentiles:
+        http.server.requests: 0.5, 0.9, 0.95, 0.99
+  observations:
+    key-values:
+      service.name: claims-api
+      deployment.environment: ${spring.profiles.active}
+
+# OpenTelemetry
+otel:
+  exporter:
+    otlp:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://mon-01:4317}
+  service:
+    name: claims-api
+
+# GenAI gateway (vendor-neutral, see ADR-011)
+genai:
+  gateway:
+    base-url: ${GENAI_GATEWAY_URL:https://genai-01:8443}
+    timeout-ms: 10000
+    max-tokens: 4096
+  default-model: ${GENAI_DEFAULT_MODEL:gpt-4o}
+  audit:
+    enabled: true
+  data-class-policy: ${GENAI_DATA_CLASS_POLICY:internal,operational,synthetic_test}
+
+# Logging
+logging:
+  level:
+    root: INFO
+    com.acme.claims: INFO
+    org.springframework.security: INFO
+  pattern:
+    # structured JSON is configured in logback-spring.xml
+    console: ""
+
+# Springdoc
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html

@@ -1,0 +1,49 @@
+# Oncall rotation. Single primary, single secondary, weekly rotation.
+# Source of truth lives in PagerDuty; this file is the human-readable
+# shadow used by the team and the Grafana annotations.
+
+team: sre
+timezone: UTC
+rotation:
+  - week: 2026-W35
+    primary: alice
+    secondary: bob
+  - week: 2026-W36
+    primary: bob
+    secondary: carol
+  - week: 2026-W37
+    primary: carol
+    secondary: dan
+  - week: 2026-W38
+    primary: dan
+    secondary: alice
+
+# Handoff checklist (every Monday 09:00 UTC):
+# - Acknowledge the handoff in #oncall
+# - Review open Sev-3+ items
+# - Confirm escalation contacts
+# - Check that the previous week's runbook updates are merged
+
+handoff_checklist:
+  - id: ack-handoff
+    description: "Acknowledge handoff in #oncall"
+  - id: review-open
+    description: "Review all open Sev-3+ items"
+  - id: confirm-escalation
+    description: "Confirm escalation contacts (primary, secondary, manager, VP)"
+  - id: merge-runbook-updates
+    description: "Merge any pending runbook updates from previous week"
+
+contacts:
+  - role: eng_manager
+    name: Erin
+    contact: pager
+  - role: vp_engineering
+    name: Victor
+    contact: pager
+  - role: security_lead
+    name: Sam
+    contact: pager
+  - role: product_owner
+    name: Priya
+    contact: slack

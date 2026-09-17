@@ -1,0 +1,24 @@
+# Production profile. Conservative defaults.
+# Anything that could leak information is denied here, even if
+# the lower environment allows it.
+
+spring:
+  jpa:
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+
+logging:
+  level:
+    root: INFO
+    com.acme.claims: INFO
+    # No DEBUG in prod. If you need debug, do it in QA.
+
+management:
+  endpoint:
+    health:
+      show-details: never
+  observations:
+    key-values:
+      env: prod

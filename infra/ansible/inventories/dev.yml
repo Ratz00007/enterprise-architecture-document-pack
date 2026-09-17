@@ -1,0 +1,25 @@
+---
+# Dev environment inventory.
+# Same VLAN as everything else (per ADR-003), logically separated by
+# firewall + IP allow-list.
+
+all:
+  vars:
+    env: dev
+    timezone: UTC
+    ntp_server: ntp.internal.acme
+    log_retention_hours: 24
+    monitoring_scrape_port: 9100
+
+  children:
+    app:
+      hosts:
+        dev-app-01:
+          ansible_host: 10.50.10.11
+          role: claims_api
+    # No DB host in dev — devs use Testcontainers / local Postgres.
+    # No GenAI host reached from dev.
+    observability_targets:
+      hosts:
+        dev-app-01:
+          ansible_host: 10.50.10.11

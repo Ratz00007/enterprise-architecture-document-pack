@@ -1,0 +1,50 @@
+{
+  "consumer": "claims-web",
+  "provider": "claims-api",
+  "interactions": [
+    {
+      "description": "create FNOL",
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/claims/fnol",
+        "headers": {
+          "Content-Type": "application/json",
+          "Idempotency-Key": "00000000-0000-0000-0000-000000000001"
+        },
+        "body": {
+          "policyId": "00000000-0000-0000-0000-00000000a001",
+          "claimantPartyId": "00000000-0000-0000-0000-000000000001",
+          "lossType": "water",
+          "lossDate": "2026-08-25T10:00:00Z",
+          "description": "Burst pipe in kitchen",
+          "estimatedAmountCents": 250000,
+          "currency": "USD"
+        }
+      },
+      "response": {
+        "status": 201,
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "id": "00000000-0000-0000-0000-00000000b001",
+          "claimNumber": "CLM-2026-00000001",
+          "policyId": "00000000-0000-0000-0000-00000000a001",
+          "claimantPartyId": "00000000-0000-0000-0000-000000000001",
+          "state": "NEW",
+          "lossDate": "2026-08-25T10:00:00Z",
+          "reportedDate": "2026-08-25T10:00:01Z",
+          "estimatedAmountCents": 250000,
+          "currency": "USD",
+          "fraudScore": null,
+          "description": "Burst pipe in kitchen",
+          "assignedAdjusterId": null,
+          "version": 1
+        }
+      }
+    }
+  ],
+  "metadata": {
+    "pactSpecification": { "version": "3.0.0" }
+  }
+}

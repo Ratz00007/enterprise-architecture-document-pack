@@ -1,0 +1,32 @@
+# Action policy. The gateway can mediate these actions. It cannot
+# mediate anything not on this list. Adding a new action is a
+# PR, a code review, and an ADR amendment.
+
+actions_allow:
+  - advisory.release_summary
+  - advisory.test_failure_rca
+  - advisory.promotion_evidence_summary
+  - advisory.log_cluster_summary
+  - advisory.fnol_form_assist
+  - adjudication.rationale_assist
+  - adjudication.similar_claim_lookup
+  - triage.severity_suggest
+  - triage.fraud_score
+  - investigation.statement_summary
+  - investigation.evidence_cluster
+  - reserve.recommendation
+  - payout.anomaly_flag
+  - reporting.narrative_summary
+
+actions_deny:
+  - database.write
+  - database.delete
+  - deploy.artifact_push
+  - deploy.artifact_promote
+  - jenkins.job_trigger
+  - jenkins.approval
+  - audit.write_anything_except_own_audit
+  - email.send
+  - shell.execute
+  - file.write
+  - network.connect_non_provider

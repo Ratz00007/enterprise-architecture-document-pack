@@ -1,0 +1,109 @@
+# Jenkins Configuration as Code.
+# This file is the single source of truth for the Jenkins controller
+# itself. It is loaded at startup and replaces the configure-screen
+# approach entirely.
+
+jenkins:
+  systemMessage: |
+    Acme Claims Jenkins — controlled by JCasC. UI changes are not
+    persisted; edit this file in the repo instead.
+  numExecutors: 0           # all work runs on agents
+  mode: EXCLUSIVE
+  securityRealm:
+    local:
+      allowsSignup: false
+      enableCaptcha: false
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+  remotingSecurity:
+    enabled: true
+
+security:
+  globalJobDslSecurityConfiguration:
+    useScriptSecurity: true
+  queueItemAuthenticator:
+    authenticators:
+      - global:
+          strategy: triggeringUsersAuthorizationStrategy
+
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - fileSystem:
+              fileName: /var/jenkins/keys/internal-ca.crt
+              id: internal-ca
+              description: Internal CA for cosign signature verification
+          - usernamePassword:
+              id: git-https
+              username: ${GIT_USER}
+              password: ${GIT_TOKEN}
+              description: Git HTTPS (read-only for source)
+          - string:
+              id: ansible-vault-password
+              secret: ${ANSIBLE_VAULT_PASSWORD}
+              description: Ansible Vault password (use with care)
+
+unclassified:
+  location:
+    url: https://ci.internal.acme/
+    adminAddress: admin@internal.acme
+  slackNotifier:
+    teamDomain: acme
+    tokenCredentialId: slack-token
+  timestamper:
+    allPipelines: true
+
+tool:
+  jdk:
+    - name: 21
+      properties:
+        - installSource:
+            installers:
+              - adoptOpenJdk:
+                  id: jdk-21-latest
+  git:
+    - name: default
+      properties:
+        - installSource:
+            installers:
+              - default:
+                  credentialsId: git-https
+  maven:
+    - name: 3.9
+      properties:
+        - installSource:
+            installers:
+              - maven:
+                  id: 3.9.6
+
+nodes:
+  - permanent:
+      name: agent-build
+      labelString: "docker linux build"
+      numExecutors: 4
+      mode: EXCLUSIVE
+      remoteFS: /home/jenkins
+      nodeProperties:
+        - envVars:
+            env:
+              - key: "JAVA_HOME"
+                value: "/opt/jdk-21"
+  - permanent:
+      name: agent-deploy
+      labelString: "ansible linux deploy"
+      numExecutors: 2
+      mode: EXCLUSIVE
+      remoteFS: /home/jenkins
+      nodeProperties:
+        - envVars:
+            env:
+              - key: "ANSIBLE_HOST_KEY_CHECKING"
+                value: "False"
+
+jobs:
+  - script:
+      scriptId: "acme-shared-library.groovy"
+      script: |
+        // Loaded from ci/jenkins/shared-library; see Jenkinsfile in apps/.

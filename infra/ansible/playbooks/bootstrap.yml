@@ -1,0 +1,12 @@
+---
+# Bootstrap a fresh host into the fleet.
+# Assumes the host is reachable over SSH and has sudo.
+# Run with:
+#   ansible-playbook -i inventories/dev.yml bootstrap.yml --limit dev-app-01
+
+- name: Bootstrap a new host
+  hosts: all
+  gather_facts: true
+  roles:
+    - role: common
+      tags: [bootstrap]

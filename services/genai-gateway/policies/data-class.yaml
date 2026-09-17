@@ -1,0 +1,67 @@
+# Data-class policy applied by the GenAI gateway.
+# Enforced before every model call, before any prompt leaves the
+# gateway. See ADR-011 for the source-of-truth.
+
+environments:
+  dev:
+    allow:
+      - public
+      - internal
+      - synthetic_test
+    deny:
+      - operational
+      - production_pii
+      - production_secrets
+    sample_operational: 0.0  # no sampling; nothing operational in dev
+
+  qa:
+    allow:
+      - public
+      - internal
+      - operational
+      - synthetic_test
+    deny:
+      - production_pii
+      - production_secrets
+    sample_operational: 1.0  # 100% in qa (low volume)
+
+  uat:
+    allow:
+      - public
+      - internal
+      - operational
+    deny:
+      - production_pii
+      - production_secrets
+    sample_operational: 1.0
+
+  prod:
+    allow:
+      - public
+      - internal
+      - operational   # sampled, see below
+    deny:
+      - production_pii       # denied by default; allow-list per request
+      - production_secrets  # denied always
+    sample_operational: 0.10
+    production_pii_allowlist:
+      - workflow: adjudication_rationale_assist
+        data_class: production_pii
+        max_rows_per_request: 50
+        ttl_minutes: 15
+        approver_role: senior_adjuster
+
+fields_pii_deny_list:
+  # Hard-deny. Any request that mentions any of these field names
+  # with a value that does not match the PII redaction rules is
+  # rejected before model dispatch.
+  - ssn
+  - social_security_number
+  - dob
+  - date_of_birth
+  - drivers_license
+  - passport_number
+  - card_number
+  - bank_account
+  - tax_id_raw
+  - medical_record
